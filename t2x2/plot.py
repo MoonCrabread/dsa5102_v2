@@ -28,17 +28,17 @@ TEXT_2 = "#52514e"
 GRID = "#e4e3de"
 BASELINE = "#8a8984"
 MODELS = {
-    "ce_linear": ("交叉熵 · 线性", "#2a78d6"),
-    "ce_mlp": ("交叉熵 · MLP", "#eb6834"),
-    "linear_td": ("线性 TD", "#1baf7a"),
-    "dqn": ("DQN · MLP", "#eda100"),
+    "ce_linear": ("CE · linear", "#2a78d6"),
+    "ce_mlp": ("CE · MLP", "#eb6834"),
+    "linear_td": ("Linear TD", "#1baf7a"),
+    "dqn": ("DQN", "#eda100"),
 }
 BOARD = "10×20"
-BASELINES = {"random": "Random", "min_height": "单特征贪心", "heuristic": "Heuristic"}
+BASELINES = {"random": "Random", "min_height": "Single-feature greedy", "heuristic": "Heuristic"}
 SEQUENTIAL = ["#cde2fb", "#86b6ef", "#3987e5", "#1c5cab", "#0d366b"]
 
 plt.rcParams.update({
-    "font.family": ["Hiragino Sans GB", "Heiti SC", "Arial Unicode MS", "sans-serif"],
+    "font.family": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans", "sans-serif"],
     "axes.unicode_minus": False,
     "figure.facecolor": SURFACE,
     "axes.facecolor": SURFACE,
@@ -83,7 +83,7 @@ def curve(run: Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 BASELINE_STYLES = {"heuristic": "--", "min_height": "-.", "random": ":"}
-STEPS_LABEL = "训练交互步数 · 放下的方块数,对数刻度"
+STEPS_LABEL = "Environment steps during training (pieces placed, log scale)"
 
 
 THOUSANDS = FuncFormatter(lambda v, _: f"{v:,.0f}")
@@ -117,7 +117,7 @@ def side_legend(fig, rect, rows: list[dict]) -> None:
     lax.set_axis_off()
     lax.set_xlim(0, 1)
     lax.set_ylim(0, 1)
-    lax.text(0, 1, "按最终消行排序", fontsize=9.5, color=TEXT_2, va="top")
+    lax.text(0, 1, "Sorted by final lines cleared", fontsize=9.5, color=TEXT_2, va="top")
     ordered = sorted(rows, key=lambda r: r["mean"], reverse=True)
     step = min(0.11, 0.88 / max(len(ordered), 1))
     for i, r in enumerate(ordered):
@@ -172,8 +172,8 @@ def label_values(ax, rows: list[dict], ends: dict) -> None:
 
 def plot_learning_curves(results: Path, out: Path, rows: list[dict]) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), sharex=True, sharey=True)
-    panels = [("策略搜索 · 交叉熵", ["ce_linear", "ce_mlp"]),
-              ("价值学习 · TD", ["linear_td", "dqn"])]
+    panels = [("Policy search · cross-entropy", ["ce_linear", "ce_mlp"]),
+              ("Value learning · TD", ["linear_td", "dqn"])]
     ends = []
     for ax, (title, models) in zip(axes, panels):
         end = {}
@@ -194,9 +194,9 @@ def plot_learning_curves(results: Path, out: Path, rows: list[dict]) -> None:
         ax.xaxis.set_minor_formatter(NullFormatter())
         ax.set_title(title, loc="left", fontsize=12, color=TEXT)
         ax.set_xlabel(STEPS_LABEL)
-    axes[0].set_ylabel("评估平均消行数")
+    axes[0].set_ylabel("Mean lines cleared in evaluation")
     axes[0].yaxis.set_major_formatter(THOUSANDS)
-    fig.suptitle(f"学习曲线 · {BOARD} 棋盘", x=0.01, ha="left", fontsize=13, color=TEXT)
+    fig.suptitle(f"Learning curves · {BOARD} board", x=0.01, ha="left", fontsize=13, color=TEXT)
     fig.subplots_adjust(left=0.06, right=0.79, top=0.84, bottom=0.15, wspace=0.14)
     for ax, end in zip(axes, ends):
         label_values(ax, rows, end)
@@ -211,7 +211,7 @@ def collect(results: Path) -> list[dict]:
         run = results / "baselines" / key
         if (run / "final_eval.csv").exists():
             lines = final_lines(run)
-            rows.append({"key": key, "label": label, "kind": "参考", "color": BASELINE,
+            rows.append({"key": key, "label": label, "kind": "reference", "color": BASELINE,
                          "mean": lines.mean(), "seed_means": [lines.mean()],
                          "episodes": len(lines), "capped": capped_count(run),
                          "env_steps": 0})
@@ -221,7 +221,7 @@ def collect(results: Path) -> list[dict]:
             continue
         per_seed = [final_lines(r) for r in runs]
         steps = [json.loads((r / "summary.json").read_text())["env_steps"] for r in runs]
-        rows.append({"key": key, "label": label, "kind": "模型", "color": color,
+        rows.append({"key": key, "label": label, "kind": "model", "color": color,
                      "mean": float(np.mean(np.concatenate(per_seed))),
                      "seed_means": [float(s.mean()) for s in per_seed],
                      "episodes": int(sum(len(s) for s in per_seed)),
@@ -253,8 +253,8 @@ def plot_all_methods(results: Path, out: Path, rows: list[dict]) -> None:
     ax.xaxis.set_major_locator(LogLocator(base=10))
     ax.xaxis.set_minor_formatter(NullFormatter())
     ax.set_xlabel(STEPS_LABEL)
-    ax.set_ylabel("评估平均消行数")
-    ax.set_title(f"全部 7 个方法 · {BOARD} 棋盘", loc="left", fontsize=13, color=TEXT)
+    ax.set_ylabel("Mean lines cleared in evaluation")
+    ax.set_title(f"All seven methods · {BOARD} board", loc="left", fontsize=13, color=TEXT)
     fig.subplots_adjust(left=0.08, right=0.76, top=0.9, bottom=0.13)
     label_values(ax, rows, end)
     side_legend(fig, [0.81, 0.3, 0.18, 0.58], rows)
@@ -277,9 +277,9 @@ def plot_final(rows: list[dict], out: Path) -> None:
                     textcoords="offset points", va="center", fontsize=9.5, color=TEXT)
     ax.set_yticks(y, [r["label"] for r in rows])
     ax.grid(axis="y", visible=False)
-    ax.set_xlabel("最终评估平均消行数")
+    ax.set_xlabel("Mean lines cleared in the final evaluation")
     ax.xaxis.set_major_formatter(THOUSANDS)
-    ax.set_title(f"最终表现 · {BOARD} 棋盘", loc="left", fontsize=13, color=TEXT)
+    ax.set_title(f"Final performance · {BOARD} board", loc="left", fontsize=13, color=TEXT)
     ax.set_xlim(0, max(max([r["mean"], *r["seed_means"]]) for r in rows) * 1.2 + 1)
     fig.tight_layout()
     fig.savefig(out / "final_performance.png", dpi=160)
@@ -302,22 +302,22 @@ def plot_grid(rows: list[dict], out: Path) -> None:
             ax.add_patch(plt.Rectangle((j, 1 - i), 0.98, 0.98, color=SEQUENTIAL[level]))
             ink = "white" if level >= 3 else TEXT
             if r is None:
-                text = "未运行"
+                text = "not run"
             else:
                 spread = (f" ± {np.std(r['seed_means']):.1f}"
                           if len(r["seed_means"]) > 1 else "")
-                text = (f"{MODELS[key][0]}\n{fmt_lines(r)}{spread} 行\n"
-                        f"训练步数 ≈ {r['env_steps']:,.0f}")
+                text = (f"{MODELS[key][0]}\n{fmt_lines(r)}{spread} lines\n"
+                        f"steps ≈ {r['env_steps']:,.0f}")
             ax.text(j + 0.49, 1 - i + 0.49, text, ha="center", va="center",
                     fontsize=10.5, color=ink, linespacing=1.5)
     ax.set_xlim(0, 2)
     ax.set_ylim(0, 2)
-    ax.set_xticks([0.49, 1.49], ["线性", "MLP"])
-    ax.set_yticks([1.49, 0.49], ["策略搜索", "价值学习"])
+    ax.set_xticks([0.49, 1.49], ["Linear", "MLP"])
+    ax.set_yticks([1.49, 0.49], ["Policy\nsearch", "Value\nlearning"])
     ax.tick_params(length=0, labelsize=11.5)
     for side in ("left", "bottom"):
         ax.spines[side].set_visible(False)
-    ax.set_title(f"2×2 框架 · {BOARD} 棋盘",
+    ax.set_title(f"2×2 grid · {BOARD} board",
                  loc="left", fontsize=12.5, color=TEXT)
     fig.tight_layout()
     fig.savefig(out / "grid_2x2.png", dpi=160)
@@ -325,15 +325,15 @@ def plot_grid(rows: list[dict], out: Path) -> None:
 
 
 def write_summary(rows: list[dict], path: Path, note: str = "") -> None:
-    lines = ([note, ""] if note else []) + ["| 模型 | 类别 | 平均消行 | seed 均值 | 评估局数 | 碰到上限局数 | 训练交互步数 |",
+    lines = ([note, ""] if note else []) + ["| Method | Kind | Mean lines | Per-seed means | Games | Games at cap | Training steps |",
              "|---|---|---:|---|---:|---:|---:|"]
-    order = ["参考", "模型"]
+    order = ["reference", "model"]
     for r in sorted(rows, key=lambda r: (order.index(r["kind"]), -r["mean"])):
         seeds = ", ".join(f"{m:.1f}" for m in r["seed_means"])
         lines.append(f"| {r['label']} | {r['kind']} | {r['mean']:.1f} | {seeds} | "
                      f"{r['episodes']} | {r['capped']} | {r['env_steps']:,.0f} |")
     if any(r["capped"] for r in rows):
-        lines.append("\n碰到上限的局在放满方块上限时被截断,其消行数是下限,平均消行应读作“至少”。")
+        lines.append("\nGames that hit the piece cap are cut short, so their line counts and the means are lower bounds.")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -352,7 +352,7 @@ def main() -> None:
     plot_final(rows, out)
     plot_grid(rows, out)
     summary = args.results / "summary.md"
-    write_summary(rows, summary, "价值学习(线性 TD、DQN)的奖励 = 消行数,与交叉熵的目标一致。")
+    write_summary(rows, summary, "Value learning (linear TD, DQN) is trained on lines cleared, the CE objective.")
     print(summary.read_text())
 
 

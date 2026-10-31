@@ -1,0 +1,8 @@
+{
+  "eval_lines_mean": 1930.84,
+  "eval_lines_std": 239.37580161745677,
+  "eval_lines_median": 1997.0,
+  "eval_length_mean": 4836.78,
+  "eval_capped": 46,
+  "env_steps": 15564140
+}

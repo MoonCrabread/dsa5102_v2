@@ -1,0 +1,21 @@
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+findfont: Failed to find font weight normal for Hiragino Sans GB, now using 300.
+| 模型 | 类别 | 平均消行 | seed 均值 | 评估局数 | 碰到上限局数 | 训练交互步数 |
+|---|---|---:|---|---:|---:|---:|
+| Random | 参考 | 0.0 | 0.0 | 50 | 0 | 0 |
+| 单特征贪心 | 参考 | 8.9 | 8.9 | 50 | 0 | 0 |
+| Heuristic | 参考 | 1453.4 | 1453.4 | 50 | 22 | 0 |
+| 交叉熵 · 线性 | 模型 | 1838.8 | 1871.5, 1705.4, 1939.6 | 150 | 121 | 2,819,196 |
+| 交叉熵 · MLP | 模型 | 1923.6 | 1842.0, 1998.0, 1930.8 | 150 | 139 | 15,080,527 |
+| 线性 TD | 模型 | 0.0 | 0.0, 0.0, 0.0 | 150 | 0 | 50,000 |
+| DQN · MLP | 模型 | 794.2 | 1285.4, 545.9, 551.2 | 150 | 21 | 50,000 |
+
+碰到上限的局在放满方块上限时被截断,其消行数是下限,平均消行应读作“至少”。
+

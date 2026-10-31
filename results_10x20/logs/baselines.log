@@ -1,0 +1,3 @@
+[random] {'eval_lines_mean': 0.0, 'eval_lines_std': 0.0, 'eval_lines_median': 0.0, 'eval_length_mean': 19.02, 'eval_capped': 0}
+[min_height] {'eval_lines_mean': 8.86, 'eval_lines_std': 7.93727913078531, 'eval_lines_median': 6.0, 'eval_length_mean': 49.48, 'eval_capped': 0}
+[heuristic] {'eval_lines_mean': 1453.4, 'eval_lines_std': 654.5519077964711, 'eval_lines_median': 1794.0, 'eval_length_mean': 3659.84, 'eval_capped': 22}

@@ -1,0 +1,22 @@
+[linear_td_lines seed=2] step=0 eval=0.0 loss=nan V=nan eps=1.00 t=0s
+[linear_td_lines seed=2] step=2500 eval=0.0 loss=0.005 V=0.3 eps=0.90 t=8s
+[linear_td_lines seed=2] step=5000 eval=0.0 loss=0.004 V=0.4 eps=0.80 t=16s
+[linear_td_lines seed=2] step=7500 eval=0.7 loss=0.005 V=0.4 eps=0.71 t=25s
+[linear_td_lines seed=2] step=10000 eval=0.7 loss=0.005 V=0.4 eps=0.61 t=33s
+[linear_td_lines seed=2] step=12500 eval=2.5 loss=0.006 V=0.5 eps=0.51 t=42s
+[linear_td_lines seed=2] step=15000 eval=0.7 loss=0.008 V=0.5 eps=0.41 t=50s
+[linear_td_lines seed=2] step=17500 eval=0.9 loss=0.009 V=0.6 eps=0.31 t=58s
+[linear_td_lines seed=2] step=20000 eval=1.0 loss=0.010 V=0.6 eps=0.22 t=65s
+[linear_td_lines seed=2] step=22500 eval=1.5 loss=0.011 V=0.7 eps=0.12 t=73s
+[linear_td_lines seed=2] step=25000 eval=1.7 loss=0.012 V=0.7 eps=0.02 t=81s
+[linear_td_lines seed=2] step=27500 eval=2.0 loss=0.013 V=0.7 eps=0.02 t=89s
+[linear_td_lines seed=2] step=30000 eval=1.5 loss=0.015 V=0.8 eps=0.02 t=97s
+[linear_td_lines seed=2] step=32500 eval=1.6 loss=0.016 V=0.8 eps=0.02 t=105s
+[linear_td_lines seed=2] step=35000 eval=1.5 loss=0.017 V=0.8 eps=0.02 t=112s
+[linear_td_lines seed=2] step=37500 eval=1.8 loss=0.018 V=0.9 eps=0.02 t=120s
+[linear_td_lines seed=2] step=40000 eval=1.9 loss=0.018 V=0.9 eps=0.02 t=128s
+[linear_td_lines seed=2] step=42500 eval=2.0 loss=0.019 V=0.9 eps=0.02 t=136s
+[linear_td_lines seed=2] step=45000 eval=1.9 loss=0.020 V=1.0 eps=0.02 t=144s
+[linear_td_lines seed=2] step=47500 eval=1.2 loss=0.021 V=1.0 eps=0.02 t=151s
+[linear_td_lines seed=2] step=50000 eval=2.1 loss=0.021 V=1.0 eps=0.02 t=159s
+[linear_td_lines seed=2] final {'eval_lines_mean': 2.08, 'eval_lines_std': 1.8093092604637826, 'eval_lines_median': 1.5, 'eval_length_mean': 38.68, 'eval_capped': 0, 'env_steps': 50000}

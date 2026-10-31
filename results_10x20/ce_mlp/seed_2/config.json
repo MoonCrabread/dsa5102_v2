@@ -1,0 +1,19 @@
+{
+  "policy": "mlp",
+  "seed": "2",
+  "height": "20",
+  "population": "100",
+  "elite_frac": "0.1",
+  "games_per_sample": "3",
+  "generations": "50",
+  "init_std": "1.0",
+  "noise_start": "0.5",
+  "noise_decay": "0.02",
+  "train_cap": "2000",
+  "eval_every": "1",
+  "eval_episodes": "10",
+  "final_eval_episodes": "50",
+  "eval_cap": "5000",
+  "workers": "4",
+  "out": "results_10x20"
+}

@@ -24,7 +24,7 @@ The goal is to clear as many lines as possible and keep the game going. This pro
 
 ### Why Tetris is used to study reinforcement learning
 
-- **Huge state space**: a 10×20 board has $2^{200}$ possible fillings, far too many to enumerate, so states or policies must be represented with features and function approximation.
+- **Huge state space**: a 10×20 board has $`2^{200}`$ possible fillings, far too many to enumerate, so states or policies must be represented with features and function approximation.
 - **Simple rules, clear outcomes**: each decision is only where to put the current piece, and its quality is measured directly by lines cleared.
 - **A genuinely hard problem**: even when the whole piece sequence is known in advance, finding the optimal placements is NP-complete (Demaine et al., 2003). When pieces arrive uniformly at random, every game ends with probability one (Burgiel, 1997), so the length of a game measures how good a policy is.
 - **A long research record**: from early approximate dynamic programming (Bertsekas & Tsitsiklis, 1996) to policy search with the cross-entropy method (Szita & Lőrincz, 2006; Thiery & Scherrer, 2009) and classification-based policy iteration (Gabillon et al., 2013), Tetris has been a standard benchmark for comparing RL methods. A recurring observation is that methods that search directly in policy space score orders of magnitude higher than methods that learn a value function. This project revisits that observation under controlled conditions.
@@ -103,22 +103,22 @@ The cross-entropy method (Rubinstein, 1999; de Boer et al., 2005) is a gradient-
 
 **Scoring function**: the input is the 13 scaled features plus the number of lines the placement clears, 14 values in total.
 
-- Linear: $\text{score} = w^\top x + b$, 15 parameters.
+- Linear: $`\text{score} = w^\top x + b`$, 15 parameters.
 - MLP: 14 → 16 → 1 with ReLU, 257 parameters.
 
 **Training loop** (one generation):
 
-1. Sample $N$ parameter vectors from a diagonal Gaussian $\mathcal{N}(\mu, \sigma^2)$, starting from $\mu = 0$, $\sigma = 1$.
+1. Sample $`N`$ parameter vectors from a diagonal Gaussian $`\mathcal{N}(\mu, \sigma^2)`$, starting from $`\mu = 0`$, $`\sigma = 1`$.
 2. Play 3 games with each parameter vector. All samples of a generation use the same 3 game seeds, so they are compared fairly. Each game is capped at 2,000 pieces.
-3. Use the mean lines cleared over the 3 games as fitness and keep the best $\rho N$ samples as the elite set $E_t$.
-4. Refit the distribution to the elites and add the decreasing extra variance: $\mu_t = \text{mean}(E_t)$, $\sigma_t^2 = \text{var}(E_t) + \max(0.5 - 0.02(t-1),\ 0)$.
+3. Use the mean lines cleared over the 3 games as fitness and keep the best $`\rho N`$ samples as the elite set $`E_t`$.
+4. Refit the distribution to the elites and add the decreasing extra variance: $`\mu_t = \text{mean}(E_t)`$, $`\sigma_t^2 = \text{var}(E_t) + \max(0.5 - 0.02(t-1),\ 0)`$.
 
-After training, the final mean $\mu$ is used as the policy.
+After training, the final mean $`\mu`$ is used as the policy.
 
 | Hyperparameter | CE · linear | CE · MLP |
 |---|---:|---:|
-| Population $N$ | 50 | 100 |
-| Elite fraction $\rho$ | 0.2 | 0.1 |
+| Population $`N`$ | 50 | 100 |
+| Elite fraction $`\rho`$ | 0.2 | 0.1 |
 | Generations | 30 | 50 |
 | Games per sample | 3 | 3 |
 | Piece cap per training game | 2,000 | 2,000 |
@@ -127,19 +127,23 @@ The MLP has about 17 times as many parameters as the linear model and is harder 
 
 ### Value learning: afterstate TD learning
 
-Because the board after a piece lands is deterministic, the agent can learn the **value of the afterstate** $V(s')$ instead of a state-action value (Sutton & Barto, 2018, §6.8). Actions are chosen by
+Because the board after a piece lands is deterministic, the agent can learn the **value of the afterstate** $`V(s')`$ instead of a state-action value (Sutton & Barto, 2018, §6.8). Actions are chosen by
 
-$$a^* = \arg\max_a \big[\, r(a) + \gamma\, V(s'_a) \,\big]$$
+```math
+a^* = \arg\max_a \big[\, r(a) + \gamma\, V(s'_a) \,\big]
+```
 
-where $r(a)$ is the number of lines placement $a$ clears immediately and $s'_a$ is the resulting board. Placements that end the game have $V = 0$.
+where $`r(a)`$ is the number of lines placement $`a`$ clears immediately and $`s'_a`$ is the resulting board. Placements that end the game have $`V = 0`$.
 
-**Training target** (one-step TD; Sutton, 1988): for the afterstate $s'_t$ actually chosen,
+**Training target** (one-step TD; Sutton, 1988): for the afterstate $`s'_t`$ actually chosen,
 
-$$V(s'_t) \leftarrow r_{t+1} + \gamma \max_a \big[\, r(a) + \gamma\, V_{\text{target}}(s'_{t+1,a}) \,\big]$$
+```math
+V(s'_t) \leftarrow r_{t+1} + \gamma \max_a \big[\, r(a) + \gamma\, V_{\text{target}}(s'_{t+1,a}) \,\big]
+```
 
 Training uses the standard DQN components (Mnih et al., 2015): experience replay, a periodically synchronized target network, the Huber (smooth L1) loss and ε-greedy exploration, with the Adam optimizer (Kingma & Ba, 2015). See [`t2x2/train_td.py`](t2x2/train_td.py).
 
-- Linear TD: $V(s') = w^\top \phi(s') + b$, 14 parameters.
+- Linear TD: $`V(s') = w^\top \phi(s') + b`$, 14 parameters.
 - DQN: 13 → 128 → 128 → 1 with ReLU, 18,433 parameters.
 
 | Hyperparameter | Linear TD | DQN |
@@ -162,7 +166,7 @@ Apart from the network and the learning rate, the two models are configured iden
 |---|---|
 | Random | Picks a legal placement uniformly at random |
 | Single-feature greedy | Picks the placement with the lowest sum of the 10 column heights |
-| Heuristic | Weights tuned by a genetic algorithm (Lee, 2013): $-0.510066 \times$ aggregate height $+ 0.760666 \times$ lines cleared $- 0.35663 \times$ holes $- 0.184483 \times$ bumpiness |
+| Heuristic | Weights tuned by a genetic algorithm (Lee, 2013): −0.510066 × aggregate height + 0.760666 × lines cleared − 0.35663 × holes − 0.184483 × bumpiness |
 
 The Heuristic weights were tuned elsewhere and are used here as is, without retraining.
 

@@ -1,279 +1,278 @@
-# 策略搜索与价值学习在 Tetris 上的 2×2 对比
+# Policy Search vs. Value Learning in Tetris: A 2×2 Study
 
-在标准 10×20 的 Tetris 棋盘上，用一个控制变量的 2×2 实验比较两种**优化方式**（策略搜索 / 价值学习）和两种**函数类**（线性 / MLP）：
+A controlled 2×2 experiment on the standard 10×20 Tetris board that compares two **optimization approaches** (policy search vs. value learning) and two **function classes** (linear vs. MLP):
 
-| | 线性 | MLP |
+| | Linear | MLP |
 |---|---|---|
-| **策略搜索**：交叉熵方法 | 交叉熵 · 线性 | 交叉熵 · MLP |
-| **价值学习**：落点后状态的 TD | 线性 TD | DQN |
+| **Policy search**: cross-entropy method | CE · linear | CE · MLP |
+| **Value learning**: afterstate TD | Linear TD | DQN |
 
-四个模型共用同一个环境、同一组特征、同一种动作选择方式和同一套评估协议，所有模型都以**消行数**为训练目标。所以结果的差别只来自这两个因素。另外有三个不训练的参考方法：Random、单特征贪心和 Heuristic。
+All four models share the same environment, the same features, the same action-selection rule and the same evaluation protocol, and all of them are trained on the **number of lines cleared**. Differences in the results therefore come from these two factors only. Three untrained reference agents are included for comparison: Random, a single-feature greedy agent and a hand-tuned Heuristic.
 
-## 背景
+## Background
 
-### Tetris 的规则
+### The rules of Tetris
 
-Tetris（俄罗斯方块）由 Alexey Pajitnov 于 1984 年设计。游戏在一个宽 10 格、高 20 格的竖直棋盘上进行：
+Tetris was designed by Alexey Pajitnov in 1984. It is played on a vertical board 10 cells wide and 20 cells tall:
 
-1. **方块**：每次出现一个由 4 个小格组成的方块，共 7 种形状，通常记作 I、O、T、S、Z、J、L。
-2. **放置**：玩家可以左右移动、旋转当前方块，然后让它落到底。方块落下后固定在棋盘上，下一个方块随即出现。
-3. **消行**：当某一行的 10 格全部被填满，这一行就会被消除，上方所有格子整体下移一行。一次放置最多能同时消掉 4 行。
-4. **游戏结束**：如果方块堆到顶部，新方块无法放下，游戏结束。
+1. **Pieces**: pieces (tetrominoes) made of four cells appear one at a time. There are seven shapes, usually called I, O, T, S, Z, J and L.
+2. **Placement**: the player moves and rotates the current piece and drops it. Once it lands it is fixed to the board and the next piece appears.
+3. **Line clears**: when a row is completely filled, it is removed and everything above it moves down by one row. A single placement can clear up to four rows.
+4. **Game over**: when the stack reaches the top and a new piece cannot be placed, the game ends.
 
-玩家的目标是尽量多消行，让游戏持续得尽量久。本项目用**一局的总消行数**衡量策略的好坏，这也是 Tetris 研究中最常用的指标（Algorta & Şimşek, 2019）。
+The goal is to clear as many lines as possible and keep the game going. This project measures a policy by **the total number of lines cleared in a game**, the most common metric in Tetris research (Algorta & Şimşek, 2019).
 
-### 为什么用 Tetris 研究强化学习
+### Why Tetris is used to study reinforcement learning
 
-- **状态空间巨大**：10×20 的棋盘有 $2^{200}$ 种填充方式，不可能逐一列举，必须用特征和函数近似来表示状态或策略。
-- **规则简单、结果明确**：每一步只要决定方块放在哪里，好坏可以直接用消行数衡量。
-- **问题本身很难**：即使提前知道整个方块序列，最优放置问题也是 NP 完全的（Demaine et al., 2003）。如果方块完全随机出现，游戏最终一定会结束（Burgiel, 1997），所以每局的长度可以用来衡量策略水平。
-- **研究积累丰富**：从早期的近似动态规划（Bertsekas & Tsitsiklis, 1996），到交叉熵等策略搜索方法（Szita & Lőrincz, 2006；Thiery & Scherrer, 2009），再到基于分类的策略迭代（Gabillon et al., 2013），Tetris 一直是比较不同强化学习方法的经典测试平台。一个反复出现的现象是：直接搜索策略的方法，成绩往往比学习价值函数的方法高出几个数量级。本项目就是在受控条件下重新检验这个现象。
+- **Huge state space**: a 10×20 board has $2^{200}$ possible fillings, far too many to enumerate, so states or policies must be represented with features and function approximation.
+- **Simple rules, clear outcomes**: each decision is only where to put the current piece, and its quality is measured directly by lines cleared.
+- **A genuinely hard problem**: even when the whole piece sequence is known in advance, finding the optimal placements is NP-complete (Demaine et al., 2003). When pieces arrive uniformly at random, every game ends with probability one (Burgiel, 1997), so the length of a game measures how good a policy is.
+- **A long research record**: from early approximate dynamic programming (Bertsekas & Tsitsiklis, 1996) to policy search with the cross-entropy method (Szita & Lőrincz, 2006; Thiery & Scherrer, 2009) and classification-based policy iteration (Gabillon et al., 2013), Tetris has been a standard benchmark for comparing RL methods. A recurring observation is that methods that search directly in policy space score orders of magnitude higher than methods that learn a value function. This project revisits that observation under controlled conditions.
 
-### 本项目使用的规则
+### Rules used in this project
 
-本项目使用 [Tetris-Gymnasium](https://github.com/Max-We/Tetris-Gymnasium) 环境，规则设置如下：
+The project uses the [Tetris-Gymnasium](https://github.com/Max-We/Tetris-Gymnasium) environment with the following settings:
 
-| 方面 | 设置 |
+| Aspect | Setting |
 |---|---|
-| 棋盘 | 10 列 × 20 行 |
-| 方块发放 | 7 种方块为一组，每组随机打乱后依次发放（"7-bag"） |
-| 动作 | 直接选择最终落点（列 × 旋转方向，共 40 个），方块硬降到底，不考虑下落过程中的操作 |
-| 重力 | 关闭，不存在时间压力 |
-| 预览与暂存 | 不使用：智能体只看到当前方块，看不到下一个方块，也不能暂存方块 |
-| 评价指标 | 一局的总消行数 |
+| Board | 10 columns × 20 rows |
+| Piece generation | The seven pieces are dealt in shuffled groups of seven ("7-bag") |
+| Actions | Choose the final placement directly (column × rotation, 40 options); the piece is hard-dropped and no moves during the fall are modelled |
+| Gravity | Off, so there is no time pressure |
+| Preview and hold | Not used: the agent sees only the current piece, not the next one, and cannot hold a piece |
+| Metric | Total lines cleared in a game |
 
-这对应文献中常见的"单方块控制器"设定（one-piece controller）：每一步只根据当前方块和棋盘做决定，不向前看后续方块（Thiery & Scherrer, 2009）。
+This is the usual "one-piece controller" setting in the literature: each decision depends only on the current piece and the board, with no lookahead at later pieces (Thiery & Scherrer, 2009).
 
-## 主要发现
+## Key findings
 
-1. **线性函数下，策略搜索远强于价值学习。** 交叉熵 · 线性平均消 1,838.8 行，线性 TD 只有 10.5 行，相差约 175 倍，3 个 seed 都如此。这和 Gabillon et al. (2013) 的观察一致：在 Tetris 上，基于价值函数的方法长期明显落后于直接搜索策略的方法。
-2. **换成 MLP 后，价值学习追了上来。** DQN 达到 1,781.7 行，和交叉熵的两个模型同属第一梯队，三者都超过了 Heuristic（1,453.4 行）。
-3. **函数类对价值学习的影响远大于对策略搜索。** 从线性换成 MLP，价值学习从 10.5 行升到 1,781.7 行；策略搜索只从 1,838.8 行变为 1,923.6 行。
-4. **DQN 的样本效率高得多。** DQN 只训练了 5 万步，在 3.5 万～4.75 万步时就首次超过 Heuristic。交叉熵 · 线性要 31 万～88 万步，交叉熵 · MLP 要 96 万～107 万步。
-5. **交叉熵 · 线性的 15 个权重都能直接解释**，而且正负号在 3 个 seed 上完全一致，见[学到的权重](#交叉熵--线性学到的权重)。
+1. **With linear functions, policy search is far stronger than value learning.** CE · linear clears 1,838.8 lines on average, linear TD only 10.5, about 175 times fewer, and this holds for all three seeds. This agrees with Gabillon et al. (2013): in Tetris, value-function methods have long lagged far behind methods that search directly for a policy.
+2. **With an MLP, value learning catches up.** DQN reaches 1,781.7 lines, in the same top group as both CE models. All three beat the Heuristic (1,453.4 lines).
+3. **The function class matters far more for value learning than for policy search.** Going from linear to MLP takes value learning from 10.5 to 1,781.7 lines, but policy search only from 1,838.8 to 1,923.6.
+4. **DQN is much more sample-efficient.** DQN trains for only 50,000 steps and first beats the Heuristic after 35,000–47,500 steps. CE · linear needs 310,000–875,000 steps and CE · MLP 960,000–1,070,000.
+5. **All 15 weights of CE · linear are directly interpretable**, and their signs agree across all three seeds; see [Learned weights of CE · linear](#learned-weights-of-ce--linear).
 
-> 强模型大部分评估局都碰到了每局 5,000 块的上限（见[评估协议](#评估协议)），所以前三名的数值都是下限，不能据此排出确定的名次。
-
----
-
-## 目录
-
-- [背景](#背景)
-- [主要发现](#主要发现)
-- [环境与特征](#环境与特征)
-- [方法](#方法)
-- [评估协议](#评估协议)
-- [实验流程](#实验流程)
-- [结果](#结果)
-- [讨论](#讨论)
-- [局限性](#局限性)
-- [复现](#复现)
-- [代码结构](#代码结构)
-- [参考文献](#参考文献)
+> Most evaluation games of the strong models hit the cap of 5,000 pieces per game (see [Evaluation protocol](#evaluation-protocol)), so the scores of the top three are lower bounds and cannot be used to rank them reliably.
 
 ---
 
-## 环境与特征
+## Contents
 
-**环境。** 基于 [Tetris-Gymnasium](https://github.com/Max-We/Tetris-Gymnasium) 的 10 列 × 20 行标准棋盘，不开重力。每一步把"当前方块放在哪一列、转成哪个方向"作为一个动作，共 40 个候选落点（10 列 × 4 种旋转），选定后方块直接落到底（硬降）。
+- [Background](#background)
+- [Key findings](#key-findings)
+- [Environment and features](#environment-and-features)
+- [Methods](#methods)
+- [Evaluation protocol](#evaluation-protocol)
+- [Pipeline](#pipeline)
+- [Results](#results)
+- [Discussion](#discussion)
+- [Limitations](#limitations)
+- [Reproducing the results](#reproducing-the-results)
+- [Code layout](#code-layout)
+- [References](#references)
+- [Third-party code](#third-party-code)
 
-**落点后特征。** 对每个候选落点，先模拟放下方块，再从放下后的棋盘（落点后状态，afterstate）计算 13 个特征：
+---
 
-| 特征 | 个数 | 含义 | 归一化 |
+## Environment and features
+
+**Afterstate features.** For every candidate placement, the piece is placed in simulation and 13 features are computed from the resulting board (the afterstate):
+
+| Feature | Count | Meaning | Scaling |
 |---|---:|---|---|
-| 列高度 | 10 | 每一列最高方块的高度 | ÷ 20 |
-| 最大高度 | 1 | 10 列中最高的那一列 | ÷ 20 |
-| 空洞数 | 1 | 上方有方块遮挡的空格数 | ÷ 40 |
-| 凹凸度 | 1 | 相邻列高度差的绝对值之和 | ÷ 40 |
+| Column heights | 10 | Height of the highest filled cell in each column | ÷ 20 |
+| Maximum height | 1 | Height of the tallest column | ÷ 20 |
+| Holes | 1 | Empty cells with a filled cell somewhere above them | ÷ 40 |
+| Bumpiness | 1 | Sum of absolute height differences between adjacent columns | ÷ 40 |
 
-这组特征是 Tetris 研究中常用手工特征的子集（Bertsekas & Tsitsiklis, 1996；Thiery & Scherrer, 2009）。
+These are a subset of the hand-crafted features commonly used in Tetris research (Bertsekas & Tsitsiklis, 1996; Thiery & Scherrer, 2009).
 
-**对环境的修正。** 原库把"会导致游戏结束"的落点编码成空棋盘的特征，看起来像最好的结果，会误导所有按特征打分的方法。本项目在 [`t2x2/env.py`](t2x2/env.py) 里把这些落点改为满高棋盘的特征。另外对库本身做了两处修改，见[第三方代码](#第三方代码)。
+**Fix to the environment.** The original library encodes placements that end the game with the features of an empty board, which looks like the best possible outcome and misleads every method that scores placements by their features. [`t2x2/env.py`](t2x2/env.py) encodes these placements as a full-height board instead. Two further changes to the library itself are listed under [Third-party code](#third-party-code).
 
-**奖励。** 每一步的奖励等于这一步消掉的行数，游戏结束时为 0。这和交叉熵的优化目标（一局的总消行数）一致。
+**Reward.** The reward of a step is the number of lines it clears, and 0 when the game ends. This matches the objective of the cross-entropy method (total lines cleared in a game).
 
-## 方法
+## Methods
 
-### 共用的动作选择方式
+### Shared action selection
 
-四个模型都采用一步贪心：对所有合法落点打分，选分数最高的那个，不向前搜索。它们的区别只在于打分函数是什么、参数怎么得到。
+All four models act greedily one step ahead: they score every legal placement and pick the highest-scoring one, with no search over later moves. They differ only in the scoring function and in how its parameters are obtained.
 
-### 策略搜索：带噪声的交叉熵方法
+### Policy search: noisy cross-entropy method
 
-交叉熵方法（Rubinstein, 1999；de Boer et al., 2005）是一种不需要梯度的黑箱优化方法。Szita & Lőrincz (2006) 发现，在参数分布的方差里额外加一项逐渐减小的噪声，可以防止过早收敛。他们用这个方法让线性控制器在 Tetris 上平均消 35 万行。本项目按这个做法实现，见 [`t2x2/train_ce.py`](t2x2/train_ce.py)。
+The cross-entropy method (Rubinstein, 1999; de Boer et al., 2005) is a gradient-free black-box optimizer. Szita & Lőrincz (2006) found that adding a decreasing amount of extra noise to the variance of the parameter distribution prevents premature convergence, and used it to train a linear Tetris controller that clears about 350,000 lines per game. This project follows that recipe; see [`t2x2/train_ce.py`](t2x2/train_ce.py).
 
-**打分函数**：输入是 13 个归一化特征，再加上"这一步消几行"，共 14 维。
+**Scoring function**: the input is the 13 scaled features plus the number of lines the placement clears, 14 values in total.
 
-- 线性：$\text{score} = w^\top x + b$，15 个参数。
-- MLP：14 → 16 → 1，ReLU 激活，257 个参数。
+- Linear: $\text{score} = w^\top x + b$, 15 parameters.
+- MLP: 14 → 16 → 1 with ReLU, 257 parameters.
 
-**训练流程**（每一代）：
+**Training loop** (one generation):
 
-1. 从对角高斯分布 $\mathcal{N}(\mu, \sigma^2)$ 中采样 $N$ 组参数。初始 $\mu = 0$，$\sigma = 1$。
-2. 每组参数玩 3 局。同一代的所有样本用相同的 3 个游戏种子，保证比较公平。每局最多 2,000 块。
-3. 以 3 局的平均消行数作为适应度，保留最好的 $\rho N$ 组作为精英。
-4. 用精英的均值和方差更新分布，并加上递减的额外方差：$\mu_t = \text{mean}(E_t)$，$\sigma_t^2 = \text{var}(E_t) + \max(0.5 - 0.02(t-1),\ 0)$，其中 $E_t$ 是第 $t$ 代的精英集合。
+1. Sample $N$ parameter vectors from a diagonal Gaussian $\mathcal{N}(\mu, \sigma^2)$, starting from $\mu = 0$, $\sigma = 1$.
+2. Play 3 games with each parameter vector. All samples of a generation use the same 3 game seeds, so they are compared fairly. Each game is capped at 2,000 pieces.
+3. Use the mean lines cleared over the 3 games as fitness and keep the best $\rho N$ samples as the elite set $E_t$.
+4. Refit the distribution to the elites and add the decreasing extra variance: $\mu_t = \text{mean}(E_t)$, $\sigma_t^2 = \text{var}(E_t) + \max(0.5 - 0.02(t-1),\ 0)$.
 
-训练结束后，使用最终的均值 $\mu$ 作为策略参数。
+After training, the final mean $\mu$ is used as the policy.
 
-| 超参数 | 交叉熵 · 线性 | 交叉熵 · MLP |
+| Hyperparameter | CE · linear | CE · MLP |
 |---|---:|---:|
-| 种群大小 $N$ | 50 | 100 |
-| 精英比例 $\rho$ | 0.2 | 0.1 |
-| 代数 | 30 | 50 |
-| 每组参数玩的局数 | 3 | 3 |
-| 训练时每局上限 | 2,000 块 | 2,000 块 |
+| Population $N$ | 50 | 100 |
+| Elite fraction $\rho$ | 0.2 | 0.1 |
+| Generations | 30 | 50 |
+| Games per sample | 3 | 3 |
+| Piece cap per training game | 2,000 | 2,000 |
 
-MLP 的参数约是线性的 17 倍，搜索更难，所以给了更大的种群和更多代数。
+The MLP has about 17 times as many parameters as the linear model and is harder to search, so it gets a larger population and more generations.
 
-### 价值学习：落点后状态的 TD 学习
+### Value learning: afterstate TD learning
 
-因为方块落下后的棋盘是确定的，可以直接学习**落点后状态的价值** $V(s')$，而不是状态-动作价值（Sutton & Barto, 2018, §6.8）。选择动作时：
+Because the board after a piece lands is deterministic, the agent can learn the **value of the afterstate** $V(s')$ instead of a state-action value (Sutton & Barto, 2018, §6.8). Actions are chosen by
 
 $$a^* = \arg\max_a \big[\, r(a) + \gamma\, V(s'_a) \,\big]$$
 
-其中 $r(a)$ 是落点 $a$ 立即消掉的行数，$s'_a$ 是放下后的棋盘。会导致游戏结束的落点，$V$ 记为 0。
+where $r(a)$ is the number of lines placement $a$ clears immediately and $s'_a$ is the resulting board. Placements that end the game have $V = 0$.
 
-**训练目标**（单步 TD，Sutton, 1988）：对实际选中的落点后状态 $s'_t$，
+**Training target** (one-step TD; Sutton, 1988): for the afterstate $s'_t$ actually chosen,
 
 $$V(s'_t) \leftarrow r_{t+1} + \gamma \max_a \big[\, r(a) + \gamma\, V_{\text{target}}(s'_{t+1,a}) \,\big]$$
 
-训练使用 DQN 的标准组件（Mnih et al., 2015）：经验回放、定期同步的目标网络、Huber 损失（smooth L1），以及 ε 贪心探索。优化器为 Adam（Kingma & Ba, 2015）。见 [`t2x2/train_td.py`](t2x2/train_td.py)。
+Training uses the standard DQN components (Mnih et al., 2015): experience replay, a periodically synchronized target network, the Huber (smooth L1) loss and ε-greedy exploration, with the Adam optimizer (Kingma & Ba, 2015). See [`t2x2/train_td.py`](t2x2/train_td.py).
 
-- 线性 TD：$V(s') = w^\top \phi(s') + b$，14 个参数。
-- DQN：13 → 128 → 128 → 1，ReLU 激活，18,433 个参数。
+- Linear TD: $V(s') = w^\top \phi(s') + b$, 14 parameters.
+- DQN: 13 → 128 → 128 → 1 with ReLU, 18,433 parameters.
 
-| 超参数 | 线性 TD | DQN |
+| Hyperparameter | Linear TD | DQN |
 |---|---:|---:|
-| 训练步数 | 50,000 | 50,000 |
-| 学习率（Adam） | 1e-3 | 3e-4 |
-| 折扣因子 γ | 0.99 | 0.99 |
-| 批大小 | 128 | 128 |
-| 回放池大小 | 50,000 | 50,000 |
-| 开始学习前的步数 | 1,000 | 1,000 |
-| 目标网络同步间隔 | 500 步 | 500 步 |
-| ε | 从 1.0 线性降到 0.02，用时 25,000 步 | 同左 |
-| 梯度裁剪（范数） | 10 | 10 |
+| Training steps | 50,000 | 50,000 |
+| Learning rate (Adam) | 1e-3 | 3e-4 |
+| Discount γ | 0.99 | 0.99 |
+| Batch size | 128 | 128 |
+| Replay buffer size | 50,000 | 50,000 |
+| Steps before learning starts | 1,000 | 1,000 |
+| Target network sync interval | 500 steps | 500 steps |
+| ε | Linear decay from 1.0 to 0.02 over 25,000 steps | Same |
+| Gradient clipping (norm) | 10 | 10 |
 
-两个模型除了网络结构和学习率，其余设置完全相同。
+Apart from the network and the learning rate, the two models are configured identically.
 
-### 参考方法（不训练）
+### Reference agents (untrained)
 
-| 方法 | 规则 |
+| Agent | Rule |
 |---|---|
-| Random | 在合法落点中均匀随机选择 |
-| 单特征贪心 | 选择使 10 列高度之和最小的落点 |
-| Heuristic | 用 Yiyuan Lee (2013) 用遗传算法调出的权重：$-0.510066 \times$ 总高度 $+ 0.760666 \times$ 消行数 $- 0.35663 \times$ 空洞数 $- 0.184483 \times$ 凹凸度 |
+| Random | Picks a legal placement uniformly at random |
+| Single-feature greedy | Picks the placement with the lowest sum of the 10 column heights |
+| Heuristic | Weights tuned by a genetic algorithm (Lee, 2013): $-0.510066 \times$ aggregate height $+ 0.760666 \times$ lines cleared $- 0.35663 \times$ holes $- 0.184483 \times$ bumpiness |
 
-Heuristic 的权重来自外部调优，本项目直接使用，没有重新训练。
+The Heuristic weights were tuned elsewhere and are used here as is, without retraining.
 
-## 评估协议
+## Evaluation protocol
 
-- **评估种子**：固定使用 900000～900049 共 50 个种子。训练用的种子都小于 900000，两者不重叠。
-- **最终评估**：每个 seed 训练结束后，用最终参数评估 50 局。每个模型 3 个 seed，共 150 局。参考方法评估 50 局。
-- **训练中评估**：交叉熵每代评估一次，TD 每 2,500 步评估一次，每次 10 局。学习曲线就是这些评估的结果。
-- **每局上限**：最多放 5,000 块。碰到上限的局会被截断，它的消行数只是下限。由于强模型有大量局碰到上限，前几名的数值之间不能精细比较。
+- **Evaluation seeds**: a fixed set of 50 seeds, 900000–900049. All training seeds are below 900000, so the two never overlap.
+- **Final evaluation**: after training, each seed is evaluated on 50 games with its final parameters, giving 150 games per model over 3 seeds. Reference agents are evaluated on 50 games.
+- **Evaluation during training**: CE is evaluated after every generation and TD every 2,500 steps, on 10 games each time. These evaluations form the learning curves.
+- **Piece cap**: a game ends after at most 5,000 pieces. A game that reaches the cap is cut short, so its line count is a lower bound. Because the strong models hit the cap in most games, their scores cannot be compared finely.
 
-## 实验流程
+## Pipeline
 
-[`run_10x20.sh`](run_10x20.sh) 一条命令完成全部步骤：
+[`run_10x20.sh`](run_10x20.sh) runs everything with one command:
 
 ```
-1. 评估 3 个参考方法                       → results_10x20/baselines/
-2. 并行训练 线性 TD、DQN（各 3 个 seed）    → results_10x20/{linear_td,dqn}/seed_*/
-3. 依次训练 交叉熵 · 线性、交叉熵 · MLP
-   （各 3 个 seed，每次用 8 个进程并行评估）  → results_10x20/{ce_linear,ce_mlp}/seed_*/
-4. 生成图表和汇总表                        → results_10x20/figures/、summary.md
+1. Evaluate the 3 reference agents                    → results_10x20/baselines/
+2. Train linear TD and DQN in parallel (3 seeds each) → results_10x20/{linear_td,dqn}/seed_*/
+3. Train CE · linear and CE · MLP one after another
+   (3 seeds each, 8 worker processes per run)         → results_10x20/{ce_linear,ce_mlp}/seed_*/
+4. Draw the figures and the summary table             → results_10x20/figures/, summary.md
 ```
 
-每次运行的输出：
+Files written by each run:
 
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| `config.json` | 这次运行的全部参数 |
-| `curve.csv` | 训练过程中每次评估的成绩 |
-| `final_eval.csv` | 最终 50 局中每一局的消行数、放的块数、是否碰到上限 |
-| `summary.json` | 最终成绩汇总 |
-| `params.npy` / `model.pt` | 训练好的参数（交叉熵 / TD） |
+| `config.json` | All arguments of the run |
+| `curve.csv` | Every evaluation during training |
+| `final_eval.csv` | Lines cleared, pieces placed and whether the cap was hit, for each of the 50 final games |
+| `summary.json` | Summary of the final evaluation |
+| `params.npy` / `model.pt` | Trained parameters (CE / TD) |
 
-## 结果
+## Results
 
-### 最终成绩
+### Final performance
 
-| 方法 | 平均消行 | 各 seed 均值 | 碰到上限的局数 | 训练交互步数 |
+| Method | Mean lines | Per-seed means | Games at cap | Training steps |
 |---|---:|---|---:|---:|
-| 交叉熵 · MLP | 1,923.6 | 1,842.0 / 1,998.0 / 1,930.8 | 139 / 150 | 约 1,508 万 |
-| 交叉熵 · 线性 | 1,838.8 | 1,871.5 / 1,705.4 / 1,939.6 | 121 / 150 | 约 282 万 |
-| DQN | 1,781.7 | 1,888.0 / 1,459.7 / 1,997.4 | 123 / 150 | 5 万 |
+| CE · MLP | 1,923.6 | 1,842.0 / 1,998.0 / 1,930.8 | 139 / 150 | ~15.08 M |
+| CE · linear | 1,838.8 | 1,871.5 / 1,705.4 / 1,939.6 | 121 / 150 | ~2.82 M |
+| DQN | 1,781.7 | 1,888.0 / 1,459.7 / 1,997.4 | 123 / 150 | 50 k |
 | Heuristic | 1,453.4 | — | 22 / 50 | — |
-| 线性 TD | 10.5 | 14.0 / 15.4 / 2.1 | 0 / 150 | 5 万 |
-| 单特征贪心 | 8.9 | — | 0 / 50 | — |
+| Linear TD | 10.5 | 14.0 / 15.4 / 2.1 | 0 / 150 | 50 k |
+| Single-feature greedy | 8.9 | — | 0 / 50 | — |
 | Random | 0.0 | — | 0 / 50 | — |
 
-![2×2 结果](results_10x20/figures/grid_2x2.png)
+![2×2 results](results_10x20/figures/grid_2x2.png)
 
-*2×2 结果。数值为最终评估的平均消行数，± 为 seed 间标准差。只有线性 TD 一格明显偏低。*
+*The 2×2 grid. Values are mean lines cleared in the final evaluation; ± is the standard deviation across seeds. Only the linear TD cell is far behind.*
 
-![最终表现](results_10x20/figures/final_performance.png)
+![Final performance](results_10x20/figures/final_performance.png)
 
-*最终表现，按成绩从高到低排列。条形为全部评估局的均值，圆点为各 seed 的均值。*
+*Final performance, sorted from best to worst. Bars are the mean over all evaluation games; dots are the per-seed means.*
 
-### 学习过程与样本效率
+### Learning curves and sample efficiency
 
-![学习曲线](results_10x20/figures/learning_curves.png)
+![Learning curves](results_10x20/figures/learning_curves.png)
 
-*学习曲线。曲线为 3 个 seed 的均值，阴影为各 seed 的最小到最大范围，横轴为训练中与环境交互的步数（对数刻度）。灰色水平线为参考方法。*
+*Learning curves. Lines are the mean of 3 seeds and shaded areas span the minimum and maximum across seeds. The x axis is the number of environment steps during training (log scale). Grey horizontal lines are the reference agents.*
 
-![全部 7 个方法](results_10x20/figures/all_methods.png)
+![All seven methods](results_10x20/figures/all_methods.png)
 
-*全部 7 个方法放在同一张图里。纵轴在 10 以下为线性刻度，10 以上为对数刻度，以便同时看清接近 0 的方法和约 2,000 行的方法。*
+*All seven methods in one plot. The y axis is linear below 10 and logarithmic above 10, so methods near 0 and methods near 2,000 lines are both visible.*
 
-训练中评估**首次超过 Heuristic（1,453.4 行）**所用的交互步数：
+Environment steps until an evaluation during training **first exceeds the Heuristic (1,453.4 lines)**:
 
-| 方法 | seed 0 | seed 1 | seed 2 |
+| Method | Seed 0 | Seed 1 | Seed 2 |
 |---|---:|---:|---:|
 | DQN | 35,000 | 47,500 | 35,000 |
-| 交叉熵 · 线性 | 875,188 | 865,174 | 309,612 |
-| 交叉熵 · MLP | 1,065,508 | 959,975 | 998,369 |
-| 线性 TD | 未超过 | 未超过 | 未超过 |
+| CE · linear | 875,188 | 865,174 | 309,612 |
+| CE · MLP | 1,065,508 | 959,975 | 998,369 |
+| Linear TD | never | never | never |
 
-DQN 每 2,500 步才评估一次，所以它的数字精确到 2,500 步。按这个指标，DQN 比交叉熵快约 7～30 倍。按总训练步数，交叉熵 · MLP 用的步数是 DQN 的约 300 倍。
+DQN is evaluated every 2,500 steps, so its numbers are accurate to 2,500 steps. By this measure DQN is about 7–30 times faster than CE. By total training budget, CE · MLP uses about 300 times as many steps as DQN.
 
-### 交叉熵 · 线性学到的权重
+### Learned weights of CE · linear
 
-线性打分函数的每个权重都对应一个看得懂的棋盘属性。只有权重的相对大小影响选择，所以下表把权重换算回原始单位，并统一除以"空洞数"权重的绝对值，每个数可以读成"相当于几个空洞"：
+Each weight of the linear scoring function belongs to a readable board property. Only the relative sizes of the weights affect the choice, so the table converts the weights back to raw units and divides them by the magnitude of the hole weight. Each number reads as "worth this many holes":
 
-| 特征（原始单位） | seed 0 | seed 1 | seed 2 |
+| Feature (raw unit) | Seed 0 | Seed 1 | Seed 2 |
 |---|---:|---:|---:|
-| 空洞数（每个） | −1.00 | −1.00 | −1.00 |
-| 消行数（每行） | +13.4 | +12.0 | +24.3 |
-| 中间列高度（第 2～9 列，每格，平均） | −0.32 | −0.40 | −0.73 |
-| 边缘列高度（第 1 / 10 列，每格） | −0.14 / −0.18 | −0.16 / −0.18 | −0.48 / −0.41 |
-| 凹凸度（每单位） | −0.20 | −0.19 | −0.28 |
-| 最大高度（每格） | −0.25 | −0.42 | −0.22 |
+| Holes (per hole) | −1.00 | −1.00 | −1.00 |
+| Lines cleared (per line) | +13.4 | +12.0 | +24.3 |
+| Inner column height (columns 2–9, per cell, mean) | −0.32 | −0.40 | −0.73 |
+| Edge column height (column 1 / 10, per cell) | −0.14 / −0.18 | −0.16 / −0.18 | −0.48 / −0.41 |
+| Bumpiness (per unit) | −0.20 | −0.19 | −0.28 |
+| Maximum height (per cell) | −0.25 | −0.42 | −0.22 |
 
-- **正负号在 3 个 seed 上完全一致**，而且符合直觉：高度、空洞、凹凸度越大越差，消行越多越好。
-- **空洞是最重的单项惩罚**：1 个空洞的代价约等于把一列中间列加高 1.4～3 格。
-- **边缘列的高度惩罚约为中间列的一半**，3 个 seed 都如此，即模型容许两侧堆得高一些、保持中间低平。
-- **具体比例在 seed 之间不唯一**（例如 seed 2 的高度惩罚相对更大），说明多种权重组合都能玩得很好。可靠的是正负号和大致的相对顺序。
+- **The signs agree across all three seeds** and match intuition: more height, holes and bumpiness are worse, more lines cleared is better.
+- **Holes carry the largest single penalty**: one hole costs as much as raising an inner column by about 1.4–3 cells.
+- **Edge columns are penalized about half as much as inner columns** in every seed, i.e. the model tolerates taller sides and keeps the middle low.
+- **The exact ratios differ between seeds** (seed 2 penalizes height relatively more), so several weight combinations play well. The signs and the rough ordering are what is reliable.
 
-## 讨论
+## Discussion
 
-**为什么线性价值函数学不好？** 价值函数要预测的是"从这个棋盘出发，未来还能消多少行"，这和高度、空洞等特征之间是高度非线性的关系。而一个好的策略只需要把候选落点排好序，线性打分就足够了。Gabillon et al. (2013) 对 Tetris 给出了同样的解释：好的策略比对应的价值函数更容易表示和学习。文献中，线性价值函数方法在 Tetris 上通常只有几千行，例如 λ-PI 约 3,200 行（Bertsekas & Ioffe, 1996），而交叉熵类方法能达到几十万到几千万行（Szita & Lőrincz, 2006；Thiery & Scherrer, 2009）。本项目的线性 TD 比文献中的线性价值函数方法更差，可能还有在线 TD 训练不稳定、超参数未充分调整等原因，本实验没有逐一排除。
+**Why does the linear value function fail?** A value function has to predict how many lines can still be cleared from a board, which depends highly non-linearly on features such as heights and holes. A good policy only needs to rank the candidate placements, which a linear score can do. Gabillon et al. (2013) give the same explanation for Tetris: good policies are easier to represent and learn than their value functions. In the literature, linear value-function methods usually reach only thousands of lines in Tetris, e.g. about 3,200 for λ-policy iteration (Bertsekas & Ioffe, 1996), while cross-entropy methods reach hundreds of thousands to tens of millions (Szita & Lőrincz, 2006; Thiery & Scherrer, 2009). The linear TD agent here does even worse than those value-function methods, which may also be due to the instability of online TD training or untuned hyperparameters; this study does not rule those out.
 
-**最终成绩和样本效率要分开看。** 最终成绩上，交叉熵和 DQN 都碰到了评估上限，无法分出高低。样本效率上，DQN 明显占优。交叉熵每次评估一组参数都要完整玩几局，大部分交互用于"打分"，而 DQN 每一步交互都会产生训练数据。
+**Final performance and sample efficiency tell different stories.** On final performance, CE and DQN all hit the evaluation cap and cannot be separated. On sample efficiency, DQN is clearly ahead. CE must play whole games to score each parameter vector, so most of its interaction goes into evaluation, while every step DQN takes produces training data.
 
-**和文献的关系。** Gabillon et al. (2013) 的 CBMPI 用分类代替回归来学习策略，在 10×20 棋盘上达到约 5,100 万行，说明近似动态规划只要学的是策略而非价值函数，也能在 Tetris 上表现很好。本项目的结果从另一个角度呼应了这一点：同样是价值学习，表达能力足够的 MLP 就能学好，线性函数则不行。
+**Relation to the literature.** The CBMPI algorithm of Gabillon et al. (2013) learns a policy by classification instead of regression and reaches about 51 million lines on the 10×20 board, showing that approximate dynamic programming can do very well in Tetris as long as it learns a policy rather than a value function. The results here echo this from another angle: the same kind of value learning succeeds with an expressive enough MLP and fails with a linear function.
 
-## 局限性
+## Limitations
 
-- **评估上限**：每局最多 5,000 块。强模型大部分局都碰到了上限，所以它们之间的差距被压缩，数值只能读作下限。
-- **训练预算的单位不同**：交叉熵按代数设定，TD 按步数设定，实际交互步数相差 56～300 倍。
-- **两边的 MLP 规模不同**：交叉熵 257 个参数，DQN 18,433 个参数。交叉熵在几千维以上的参数空间中很难搜索，所以没有用同样大的网络。
-- **只有 3 个 seed，只用了一组特征**，各方法只用了一组超参数。没有做显著性检验。
-- **奖励的选择**：价值学习最初使用环境的默认奖励（每放一块 +1，加上与消行数平方成正比的分数）。为了让两类方法优化同一个目标，最终版本改为只以消行数作为奖励。
+- **Evaluation cap**: games end after at most 5,000 pieces. Most games of the strong models hit the cap, which compresses the differences between them, so their scores are lower bounds.
+- **Training budgets use different units**: CE is budgeted in generations and TD in steps, so the actual number of environment steps differs by a factor of 56–300.
+- **The two MLPs differ in size**: 257 parameters for CE and 18,433 for DQN. The cross-entropy method struggles to search spaces with thousands of parameters, so a network as large as DQN's was not used.
+- **Only 3 seeds and one feature set**, one hyperparameter setting per method, and no significance tests.
+- **Choice of reward**: value learning was first run with the environment's default reward (+1 per piece placed plus a score proportional to the square of the lines cleared). The final version uses lines cleared as the reward so that both families optimize the same objective.
 
-## 复现
+## Reproducing the results
 
 ```bash
 python -m venv venv && source venv/bin/activate
@@ -281,28 +280,28 @@ pip install -r requirements.txt
 bash run_10x20.sh python
 ```
 
-- 所有运行在给定 seed 下是确定的，并行进程数不影响结果。
-- 耗时参考（10 核笔记本）：价值学习部分约 1 小时；交叉熵部分串行运行，需要十几个小时，其中交叉熵 · MLP 每个 seed 需要数小时。
-- 可以用环境变量调整：`SEEDS="0 1 2"` 选择 seed，`CE_WORKERS=8` 设置交叉熵的并行进程数。
-- 只重新生成图表和汇总表：`python -m t2x2.plot`。
+- Every run is deterministic given its seed; the number of parallel processes does not change the results.
+- Run time on a 10-core laptop: about 1 hour for value learning; the CE runs are sequential and take more than ten hours in total, several hours per CE · MLP seed.
+- Environment variables: `SEEDS="0 1 2"` selects seeds and `CE_WORKERS=8` sets the CE worker processes.
+- To redraw only the figures and the summary table: `python -m t2x2.plot`.
 
-## 代码结构
+## Code layout
 
 ```
 t2x2/
-├── env.py         环境：分组动作、落点后特征、游戏结束落点的修正、奖励 = 消行数
-├── evaluate.py    统一的评估协议
-├── policies.py    参考方法、交叉熵的打分函数、TD 的价值网络
-├── train_ce.py    带噪声的交叉熵方法（线性 / MLP）
-├── train_td.py    落点后状态的 TD 学习（线性 TD / DQN）
-├── baselines.py   评估三个参考方法
-└── plot.py        生成图表和汇总表
-tetris_gymnasium/  Tetris 环境库（第三方，见下方说明）
-run_10x20.sh       复现全部结果
-results_10x20/     各次运行的配置、学习曲线、最终评估和训练好的参数
+├── env.py         Environment: grouped actions, afterstate features, game-over fix, reward = lines cleared
+├── evaluate.py    Shared evaluation protocol
+├── policies.py    Reference agents, CE scoring functions, TD value networks
+├── train_ce.py    Noisy cross-entropy method (linear / MLP)
+├── train_td.py    Afterstate TD learning (linear TD / DQN)
+├── baselines.py   Evaluates the three reference agents
+└── plot.py        Figures and summary table
+tetris_gymnasium/  Tetris environment library (third party, see below)
+run_10x20.sh       Reproduces every result
+results_10x20/     Config, learning curve, final evaluation and trained parameters of every run
 ```
 
-## 参考文献
+## References
 
 - Algorta, S., & Şimşek, Ö. (2019). The game of Tetris in machine learning. *arXiv:1905.01652*.
 - Bertsekas, D. P., & Ioffe, S. (1996). *Temporal differences-based policy iteration and applications in neuro-dynamic programming* (Report LIDS-P-2349). MIT.
@@ -320,9 +319,9 @@ results_10x20/     各次运行的配置、学习曲线、最终评估和训练�
 - Szita, I., & Lőrincz, A. (2006). Learning Tetris using the noisy cross-entropy method. *Neural Computation*, 18(12), 2936–2941.
 - Thiery, C., & Scherrer, B. (2009). Building controllers for Tetris. *ICGA Journal*, 32(1), 3–11.
 
-## 第三方代码
+## Third-party code
 
-`tetris_gymnasium/` 来自 [Tetris-Gymnasium](https://github.com/Max-We/Tetris-Gymnasium)（Maximilian Weichart，MIT 许可证，见 [`LICENSE_tetris_gymnasium`](LICENSE_tetris_gymnasium)），本项目改动了其中两个文件：
+`tetris_gymnasium/` comes from [Tetris-Gymnasium](https://github.com/Max-We/Tetris-Gymnasium) by Maximilian Weichart (MIT License, see [`LICENSE_tetris_gymnasium`](LICENSE_tetris_gymnasium)). This project changes two of its files:
 
-- `wrappers/grouped.py`：新增 `info["game_over_mask"]` 和 `info["lines_cleared_per_action"]`，标出每个候选落点是否会输掉游戏、会消几行。
-- `wrappers/observation.py`：修复用 uint8 掩码做索引、错误地把棋盘顶部两行清零的问题。
+- `wrappers/grouped.py`: adds `info["game_over_mask"]` and `info["lines_cleared_per_action"]`, marking for each candidate placement whether it ends the game and how many lines it clears.
+- `wrappers/observation.py`: fixes a bug where indexing with a uint8 mask wrongly zeroed the top two rows of the board.

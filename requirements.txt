@@ -3,6 +3,7 @@ gymnasium==1.4.0
 numpy==2.5.4
 torch==2.15.0
 matplotlib==3.11.2
-opencv-python-headless==5.0.0.93
+opencv-python==5.0.0.93
+pillow==13.0.0
 jax==0.5.3
 chex==0.1.90

@@ -69,7 +69,6 @@ This is the usual "one-piece controller" setting in the literature: each decisio
 - [Discussion](#discussion)
 - [Limitations](#limitations)
 - [Reproducing the results](#reproducing-the-results)
-- [Interactive demo and animations](#interactive-demo-and-animations)
 - [Code layout](#code-layout)
 - [References](#references)
 - [Third-party code](#third-party-code)
@@ -202,6 +201,51 @@ Files written by each run:
 | `params.npy` / `model.pt` | Trained parameters (CE / TD) |
 
 ## Results
+
+### Interactive demo and animations
+
+![The three baselines playing the same game](results_10x20/animations/comparison_baselines.gif)
+
+All agents in these clips play the same evaluation game (seed 900000, so every agent gets the same pieces), and the outlined cells are the placement each agent has chosen. First the three baselines: Random loses after 22 pieces without clearing a line, and the single-feature greedy agent after 72 pieces with 15 lines. The Heuristic is still playing at the end of the clip and, in the full recorded game, loses after 4,371 pieces with 1,732 lines.
+
+![The four RL models playing the same game](results_10x20/animations/comparison_rl.gif)
+
+Then the four final RL models (training seed 0) on the same game. Linear TD loses after 51 pieces; the other three are still playing at the end of the clip, and in the full recorded game all three reach the 5,000-piece cap.
+
+How one agent's play improves during training is shown in [Gameplay during training](#gameplay-during-training).
+
+**Play, or watch a model play**:
+
+```bash
+python -m t2x2.demo                  # start menu: HUMAN or any model
+python -m t2x2.demo --model dqn      # go straight to one model
+python -m t2x2.demo --train-seed 2   # load the models of another training seed
+```
+
+| Mode | Keys |
+|---|---|
+| Human | A / D move · S down · W / E rotate · SPACE hard drop · Q hold |
+| Model | + / − speed · F turbo (no animation) |
+| Both | P pause · R restart · ESC menu |
+
+In model mode the model gets exactly the observation used in training and evaluation, and each game uses the evaluation seeds in order (900000, 900001, …), so the games match the recorded ones in `final_eval.csv`. The NEXT panel is shown for the viewer only; the models never see it.
+
+**Render the animations** (written to `results_10x20/animations/`):
+
+```bash
+python -m t2x2.animate                       # every agent + the two comparisons
+python -m t2x2.animate --pieces 500 --fps 30 # longer, faster clips
+```
+
+| File | Contents |
+|---|---|
+| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4` | Full game screen of one RL model for the first 300 pieces, ending with the result of the full recorded game |
+| `random.mp4`, `min_height.mp4`, `heuristic.mp4` | The same for each baseline |
+| `comparison_rl.mp4`, `comparison_rl.gif` | The four RL models side by side (300 pieces in the MP4, 100 in the GIF) |
+| `comparison_baselines.mp4`, `comparison_baselines.gif` | The three baselines side by side |
+| `dqn_training.mp4`, `dqn_training.gif`, `dqn_training_curve.png` | One DQN agent at five stages of training, see [Gameplay during training](#gameplay-during-training) |
+
+The interface is adapted from the `pretty_tetris_v3` interface of the [DSA5102 project](https://github.com/MoonCrabread/dsa5102).
 
 ### Final performance
 
@@ -339,51 +383,6 @@ bash run_10x20.sh python
 - To redraw only the figures and the summary table: `python -m t2x2.plot`.
 - Gameplay during training: `python -m t2x2.train_td --network mlp --seed 0 --name dqn_checkpoints --save-every 2500` (about 15 minutes of training plus the final evaluation), then `python -m t2x2.animate_training` (evaluates the shown checkpoints on 50 games and renders the animation, about 5 minutes on 10 cores).
 - Board-shape analysis: `python -m t2x2.robustness` replays all 650 evaluation games (about 30 minutes on 10 cores); `--plot-only` redraws the figure and table from the saved CSVs.
-
-## Interactive demo and animations
-
-![The four RL models playing the same game](results_10x20/animations/comparison_rl.gif)
-
-The four final RL models (training seed 0) play the same evaluation game (seed 900000, so every agent gets the same pieces). The outlined cells are the placement each model has chosen. Linear TD loses after 51 pieces; the other three are still playing at the end of the clip, and in the full recorded game all three reach the 5,000-piece cap.
-
-![The three baselines playing the same game](results_10x20/animations/comparison_baselines.gif)
-
-The three baselines on the same game. Random loses after 22 pieces without clearing a line, and the single-feature greedy agent after 72 pieces with 15 lines. The Heuristic is still playing at the end of the clip and, in the full recorded game, loses after 4,371 pieces with 1,732 lines.
-
-How one agent's play improves during training is shown in [Gameplay during training](#gameplay-during-training).
-
-**Play, or watch a model play**:
-
-```bash
-python -m t2x2.demo                  # start menu: HUMAN or any model
-python -m t2x2.demo --model dqn      # go straight to one model
-python -m t2x2.demo --train-seed 2   # load the models of another training seed
-```
-
-| Mode | Keys |
-|---|---|
-| Human | A / D move · S down · W / E rotate · SPACE hard drop · Q hold |
-| Model | + / − speed · F turbo (no animation) |
-| Both | P pause · R restart · ESC menu |
-
-In model mode the model gets exactly the observation used in training and evaluation, and each game uses the evaluation seeds in order (900000, 900001, …), so the games match the recorded ones in `final_eval.csv`. The NEXT panel is shown for the viewer only; the models never see it.
-
-**Render the animations** (written to `results_10x20/animations/`):
-
-```bash
-python -m t2x2.animate                       # every agent + the two comparisons
-python -m t2x2.animate --pieces 500 --fps 30 # longer, faster clips
-```
-
-| File | Contents |
-|---|---|
-| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4` | Full game screen of one RL model for the first 300 pieces, ending with the result of the full recorded game |
-| `random.mp4`, `min_height.mp4`, `heuristic.mp4` | The same for each baseline |
-| `comparison_rl.mp4`, `comparison_rl.gif` | The four RL models side by side (300 pieces in the MP4, 100 in the GIF) |
-| `comparison_baselines.mp4`, `comparison_baselines.gif` | The three baselines side by side |
-| `dqn_training.mp4`, `dqn_training.gif`, `dqn_training_curve.png` | One DQN agent at five stages of training, see [Gameplay during training](#gameplay-during-training) |
-
-The interface is adapted from the `pretty_tetris_v3` interface of the [DSA5102 project](https://github.com/MoonCrabread/dsa5102).
 
 ## Code layout
 

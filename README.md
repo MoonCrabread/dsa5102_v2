@@ -51,8 +51,9 @@ This is the usual "one-piece controller" setting in the literature: each decisio
 3. **The function class matters far more for value learning than for policy search.** Going from linear to MLP takes value learning from 10.5 to 1,781.7 lines, but policy search only from 1,838.8 to 1,923.6.
 4. **DQN is much more sample-efficient.** DQN trains for only 50,000 steps and first beats the Heuristic after 35,000–47,500 steps. CE · linear needs 310,000–875,000 steps and CE · MLP 960,000–1,070,000.
 5. **All 15 weights of CE · linear are directly interpretable**, and their signs agree across all three seeds; see [Learned weights of CE · linear](#learned-weights-of-ce--linear).
+6. **The board shape separates the top three where lines cleared cannot.** DQN keeps the cleanest board most of the time (fewest holes, least time above half height) but, once its stack gets very high, recovers least often. Both CE models rarely get near the top, and CE · MLP is near the best on both counts. All three keep the stack about 2 rows lower than the Heuristic. These differences are about as large as the differences between seeds, so they describe playing styles rather than a significant ranking; see [Distance from losing](#distance-from-losing).
 
-> Most evaluation games of the strong models hit the cap of 5,000 pieces per game (see [Evaluation protocol](#evaluation-protocol)), so the scores of the top three are lower bounds and cannot be used to rank them reliably.
+> Most evaluation games of the strong models hit the cap of 5,000 pieces per game (see [Evaluation protocol](#evaluation-protocol)), so the scores of the top three are lower bounds and cannot be used to rank them reliably by lines cleared. Finding 6 compares them by the board shape instead.
 
 ---
 
@@ -68,6 +69,7 @@ This is the usual "one-piece controller" setting in the literature: each decisio
 - [Discussion](#discussion)
 - [Limitations](#limitations)
 - [Reproducing the results](#reproducing-the-results)
+- [Interactive demo and animations](#interactive-demo-and-animations)
 - [Code layout](#code-layout)
 - [References](#references)
 - [Third-party code](#third-party-code)
@@ -260,17 +262,42 @@ Each weight of the linear scoring function belongs to a readable board property.
 - **Edge columns are penalized about half as much as inner columns** in every seed, i.e. the model tolerates taller sides and keeps the middle low.
 - **The exact ratios differ between seeds** (seed 2 penalizes height relatively more), so several weight combinations play well. The signs and the rough ordering are what is reliable.
 
+### Distance from losing
+
+Lines cleared cannot rank the top three, because most of their games reach the cap. A model that keeps the stack low and free of holes is further from losing, and this can be measured without playing to the end. [`t2x2/robustness.py`](t2x2/robustness.py) replays every final-evaluation game (same parameters, seeds and cap; all 650 replays reproduce `final_eval.csv` exactly) and records the board after every placement.
+
+| Model | Mean lines | Mean max height | Mean holes | Mean bumpiness | Placements with max height ≥ 10 | Games lost before the cap |
+|---|---:|---:|---:|---:|---:|---:|
+| CE · MLP | 1,923.6 | 4.71 | 1.52 | 7.85 | 4.1% | 11 / 150 |
+| CE · linear | 1,838.8 | 5.19 | 2.33 | 7.63 | 7.2% | 29 / 150 |
+| DQN | 1,781.7 | 4.76 | **0.81** | 8.50 | **3.2%** | 27 / 150 |
+| Heuristic | 1,453.4 | 6.83 | 3.79 | 7.41 | 21.2% | 28 / 50 |
+| Linear TD | 10.5 | 11.51 | 18.32 | 12.20 | 60.1% | 150 / 150 |
+
+Values are averaged within each game, then over games. Heights are in rows on the 20-row board. Per-seed values are in [`results_10x20/robustness/summary.md`](results_10x20/robustness/summary.md).
+
+![Distance from losing](results_10x20/robustness/robustness.png)
+
+*Left: the share of all placements after which the tallest column is at least h rows high (log scale). Lower and further left is safer. Right: per-seed means of the maximum height and of the number of holes; the tick is the mean over all games.*
+
+- **Typical play: DQN is the tidiest.** It has the fewest holes (0.81) and spends the least time with the stack above half height (3.2%), with CE · MLP close behind and CE · linear last.
+- **Worst case: DQN recovers least often.** Above about 17 rows its tail is the heaviest: 0.062% of its placements reach 18 rows or more, against 0.017% for CE · linear and 0.007% for CE · MLP. This fits its lower mean lines, which come from a minority of games that collapse rather than from weaker play overall.
+- **CE · MLP is near the best on both counts.** Its tail falls fastest, and it loses the fewest games before the cap (11 of 150).
+- **CE · linear clears more lines than DQN but keeps a messier board.** This is the one place where lines cleared and board shape order two models differently.
+- **The function class matters here too.** Going from linear to MLP cuts the holes of value learning from 18.3 to 0.8, and those of policy search from 2.3 to 1.5, a gain that the cap hides in lines cleared.
+- **Seeds vary as much as methods.** CE · linear is the most consistent across seeds; DQN seed 1 and CE · MLP seed 1 differ markedly from the other two seeds of their method. With 3 seeds, only "top three > Heuristic > Linear TD" is a robust ordering.
+
 ## Discussion
 
 **Why does the linear value function fail?** A value function has to predict how many lines can still be cleared from a board, which depends highly non-linearly on features such as heights and holes. A good policy only needs to rank the candidate placements, which a linear score can do. Gabillon et al. (2013) give the same explanation for Tetris: good policies are easier to represent and learn than their value functions. In the literature, linear value-function methods usually reach only thousands of lines in Tetris, e.g. about 3,200 for λ-policy iteration (Bertsekas & Ioffe, 1996), while cross-entropy methods reach hundreds of thousands to tens of millions (Szita & Lőrincz, 2006; Thiery & Scherrer, 2009). The linear TD agent here does even worse than those value-function methods, which may also be due to the instability of online TD training or untuned hyperparameters; this study does not rule those out.
 
-**Final performance and sample efficiency tell different stories.** On final performance, CE and DQN all hit the evaluation cap and cannot be separated. On sample efficiency, DQN is clearly ahead. CE must play whole games to score each parameter vector, so most of its interaction goes into evaluation, while every step DQN takes produces training data.
+**Final performance and sample efficiency tell different stories.** On final performance, CE and DQN all hit the evaluation cap and cannot be separated by lines cleared; the board shape shows different styles (DQN tidier on average, CE safer in the worst case) but no significant ranking. On sample efficiency, DQN is clearly ahead. CE must play whole games to score each parameter vector, so most of its interaction goes into evaluation, while every step DQN takes produces training data.
 
 **Relation to the literature.** The CBMPI algorithm of Gabillon et al. (2013) learns a policy by classification instead of regression and reaches about 51 million lines on the 10×20 board, showing that approximate dynamic programming can do very well in Tetris as long as it learns a policy rather than a value function. The results here echo this from another angle: the same kind of value learning succeeds with an expressive enough MLP and fails with a linear function.
 
 ## Limitations
 
-- **Evaluation cap**: games end after at most 5,000 pieces. Most games of the strong models hit the cap, which compresses the differences between them, so their scores are lower bounds.
+- **Evaluation cap**: games end after at most 5,000 pieces. Most games of the strong models hit the cap, which compresses the differences between them, so their scores are lower bounds. The board-shape statistics work around this only partly: they show how close to losing a model plays, not how long it would survive without the cap.
 - **Training budgets use different units**: CE is budgeted in generations and TD in steps, so the actual number of environment steps differs by a factor of 56–300.
 - **The two MLPs differ in size**: 257 parameters for CE and 18,433 for DQN. The cross-entropy method struggles to search spaces with thousands of parameters, so a network as large as DQN's was not used.
 - **Only 3 seeds and one feature set**, one hyperparameter setting per method, and no significance tests.
@@ -288,6 +315,44 @@ bash run_10x20.sh python
 - Run time on a 10-core laptop: about 1 hour for value learning; the CE runs are sequential and take more than ten hours in total, several hours per CE · MLP seed.
 - Environment variables: `SEEDS="0 1 2"` selects seeds and `CE_WORKERS=8` sets the CE worker processes.
 - To redraw only the figures and the summary table: `python -m t2x2.plot`.
+- Board-shape analysis: `python -m t2x2.robustness` replays all 650 evaluation games (about 30 minutes on 10 cores); `--plot-only` redraws the figure and table from the saved CSVs.
+
+## Interactive demo and animations
+
+![The four final models playing the same game](results_10x20/animations/comparison.gif)
+
+The four final models (training seed 0) play the same evaluation game (seed 900000, so every model gets the same pieces). The outlined cells are the placement each model has chosen. Linear TD loses after 51 pieces; the other three are still playing at the end of the clip, and in the full recorded game each of them reaches the 5,000-piece cap.
+
+**Play, or watch a model play**:
+
+```bash
+python -m t2x2.demo                  # start menu: HUMAN or any model
+python -m t2x2.demo --model dqn      # go straight to one model
+python -m t2x2.demo --train-seed 2   # load the models of another training seed
+```
+
+| Mode | Keys |
+|---|---|
+| Human | A / D move · S down · W / E rotate · SPACE hard drop · Q hold |
+| Model | + / − speed · F turbo (no animation) |
+| Both | P pause · R restart · ESC menu |
+
+In model mode the model gets exactly the observation used in training and evaluation, and each game uses the evaluation seeds in order (900000, 900001, …), so the games match the recorded ones in `final_eval.csv`. The NEXT panel is shown for the viewer only; the models never see it.
+
+**Render the animations** (written to `results_10x20/animations/`):
+
+```bash
+python -m t2x2.animate                       # all four models + comparison
+python -m t2x2.animate --pieces 500 --fps 30 # longer, faster clips
+```
+
+| File | Contents |
+|---|---|
+| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4` | Full game screen of one model for the first 300 pieces, ending with the result of the full recorded game |
+| `comparison.mp4` | The four models side by side for the first 300 pieces |
+| `comparison.gif` | The first 100 pieces of the side-by-side view (the GIF above) |
+
+The interface is adapted from the `pretty_tetris_v3` interface of the [DSA5102 project](https://github.com/MoonCrabread/dsa5102).
 
 ## Code layout
 
@@ -299,7 +364,14 @@ t2x2/
 ├── train_ce.py    Noisy cross-entropy method (linear / MLP)
 ├── train_td.py    Afterstate TD learning (linear TD / DQN)
 ├── baselines.py   Evaluates the three reference agents
-└── plot.py        Figures and summary table
+├── plot.py        Figures and summary table
+├── models.py      Loads every trained model as a playable agent (the interface for the tools below)
+├── playback.py    Plays an agent piece by piece and produces the animation frames
+├── ui.py          Game screen, menu and comparison view (OpenCV + Pillow)
+├── demo.py        Interactive demo: human play or watch a model
+├── animate.py     Renders the MP4 / GIF animations of the final models
+├── robustness.py  Replays the evaluation games and records the board shape after every placement
+└── plot_robustness.py  Figure for the board-shape analysis
 tetris_gymnasium/  Tetris environment library (third party, see below)
 run_10x20.sh       Reproduces every result
 results_10x20/     Config, learning curve, final evaluation and trained parameters of every run

@@ -319,9 +319,9 @@ bash run_10x20.sh python
 
 ## Interactive demo and animations
 
-![The four final models playing the same game](results_10x20/animations/comparison.gif)
+![The four final models and the Heuristic playing the same game](results_10x20/animations/comparison.gif)
 
-The four final models (training seed 0) play the same evaluation game (seed 900000, so every model gets the same pieces). The outlined cells are the placement each model has chosen. Linear TD loses after 51 pieces; the other three are still playing at the end of the clip, and in the full recorded game each of them reaches the 5,000-piece cap.
+The four final models (training seed 0) and the Heuristic play the same evaluation game (seed 900000, so every agent gets the same pieces). The outlined cells are the placement each agent has chosen. Linear TD loses after 51 pieces; the others are still playing at the end of the clip. In the full recorded game the three strong models reach the 5,000-piece cap, while the Heuristic loses after 4,371 pieces with 1,732 lines.
 
 **Play, or watch a model play**:
 
@@ -342,14 +342,14 @@ In model mode the model gets exactly the observation used in training and evalua
 **Render the animations** (written to `results_10x20/animations/`):
 
 ```bash
-python -m t2x2.animate                       # all four models + comparison
+python -m t2x2.animate                       # four models + Heuristic + comparison
 python -m t2x2.animate --pieces 500 --fps 30 # longer, faster clips
 ```
 
 | File | Contents |
 |---|---|
-| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4` | Full game screen of one model for the first 300 pieces, ending with the result of the full recorded game |
-| `comparison.mp4` | The four models side by side for the first 300 pieces |
+| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4`, `heuristic.mp4` | Full game screen of one agent for the first 300 pieces, ending with the result of the full recorded game |
+| `comparison.mp4` | All five agents side by side for the first 300 pieces |
 | `comparison.gif` | The first 100 pieces of the side-by-side view (the GIF above) |
 
 The interface is adapted from the `pretty_tetris_v3` interface of the [DSA5102 project](https://github.com/MoonCrabread/dsa5102).

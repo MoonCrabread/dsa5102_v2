@@ -1,10 +1,11 @@
 """Render animations of the final trained models.
 
-For each model of the 2x2 grid it plays the same evaluation game (same piece
-sequence) with the final parameters and writes
+For each model of the 2x2 grid, and the Heuristic as a reference, it plays
+the same evaluation game (same piece sequence) with the final parameters and
+writes
 
     results_10x20/animations/<model>.mp4   full game screen, one model
-    results_10x20/animations/comparison.mp4  the four models side by side
+    results_10x20/animations/comparison.mp4  all of them side by side
     results_10x20/animations/comparison.gif  a shorter version for the README
 
 The strong models survive the whole 5,000-piece game, so the clips show the
@@ -29,6 +30,10 @@ from t2x2.env import make_env
 from t2x2.evaluate import EVAL_SEED_START
 from t2x2.models import GRID, MODELS, RESULTS, eval_game, eval_summary, load_agent
 from t2x2.playback import AgentGame
+
+
+# The 2x2 grid plus the hand-tuned Heuristic as a reference.
+SHOWN = (*GRID, "heuristic")
 
 
 class Video:
@@ -63,7 +68,7 @@ def model_clip(key, args, out: Path) -> None:
         ("Method", spec.method),
         ("Function", spec.function_class),
         ("Parameters", f"{spec.n_params:,}"),
-        ("Training seed", args.train_seed),
+        ("Training seed", args.train_seed if spec.trained else "—"),
         ("Eval mean", f"{summary['eval_lines_mean']:,.1f} lines" if summary else "—"),
     ]
 
@@ -75,9 +80,10 @@ def model_clip(key, args, out: Path) -> None:
             stats=[("Lines", f"{game.lines:,}"), ("Pieces", f"{game.pieces:,}"),
                    ("Score", f"{game.score:,}"), ("Game seed", args.game_seed),
                    ("Clip", f"first {args.pieces:,}")],
-            controls=[("FINAL", "trained model"), ("GREEDY", "one-piece lookahead"),
+            controls=[("FINAL", "trained model") if spec.trained else ("REFERENCE", "hand-tuned weights"),
+                      ("GREEDY", "one-piece lookahead"),
                       ("GHOST", "= chosen placement")],
-            corner=f"Training seed {args.train_seed}",
+            corner=f"Training seed {args.train_seed}" if spec.trained else "Untrained reference",
             next_note="The agent sees only the current piece",
         )
         return ui.render_game(game.base, view, hud)
@@ -103,18 +109,18 @@ def model_clip(key, args, out: Path) -> None:
 def comparison_frames(args, pieces: int):
     """Yield (frame, hold) for the side-by-side clip of the 2x2 grid."""
     games = {}
-    for key in GRID:
+    for key in SHOWN:
         games[key] = AgentGame(load_agent(key, args.train_seed), cap=pieces)
         games[key].reset(args.game_seed)
-    notes = {k: full_game_note(k, args.train_seed, args.game_seed) for k in GRID}
-    env = games[GRID[0]].base
-    header = "FINAL MODELS ON THE SAME GAME"
+    notes = {k: full_game_note(k, args.train_seed, args.game_seed) for k in SHOWN}
+    env = games[SHOWN[0]].base
+    header = "FINAL MODELS AND THE HEURISTIC ON THE SAME GAME"
     sub = (f"Game seed {args.game_seed}  ·  training seed {args.train_seed}  ·  "
            f"first {pieces:,} pieces  ·  ghost = chosen placement")
 
     def columns(views):
         cols = []
-        for key in GRID:
+        for key in SHOWN:
             g, spec = games[key], MODELS[key]
             status = "GAME OVER" if g.done and not g.capped else None
             cols.append({
@@ -140,7 +146,7 @@ def comparison_frames(args, pieces: int):
 
 
 def comparison_video(args, out: Path) -> None:
-    video = Video(out / "comparison.mp4", args.fps, (ui.CMP_W, ui.CMP_H))
+    video = Video(out / "comparison.mp4", args.fps, (ui.comparison_width(len(SHOWN)), ui.CMP_H))
     try:
         for frame, hold in comparison_frames(args, args.pieces):
             video.write(frame, hold)
@@ -165,7 +171,7 @@ def color_swatch(env, width: int, cell: int) -> np.ndarray:
 
 def comparison_gif(args, out: Path) -> None:
     frames, durations = [], []
-    w, h = int(ui.CMP_W * args.gif_scale), int(ui.CMP_H * args.gif_scale)
+    w, h = int(ui.comparison_width(len(SHOWN)) * args.gif_scale), int(ui.CMP_H * args.gif_scale)
     cell = max(8, int(ui.CMP_CELL * args.gif_scale))
     palette = None  # one shared palette lets the GIF store only changed regions
     for frame, hold in comparison_frames(args, args.gif_pieces):
@@ -189,7 +195,7 @@ def comparison_gif(args, out: Path) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--models", nargs="+", default=list(GRID), choices=list(MODELS))
+    p.add_argument("--models", nargs="+", default=list(SHOWN), choices=list(MODELS))
     p.add_argument("--train-seed", type=int, default=0)
     p.add_argument("--game-seed", type=int, default=EVAL_SEED_START)
     p.add_argument("--pieces", type=int, default=300, help="pieces per video clip")

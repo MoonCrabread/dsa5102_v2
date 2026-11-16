@@ -409,7 +409,11 @@ def render_game_over(img, rows: list, title="GAME OVER", footer=(), note="") -> 
 
 CMP_CELL = 22
 CMP_COL_W = 250
-CMP_W, CMP_H = 1100, 720
+CMP_GAP, CMP_H = 20, 720
+
+
+def comparison_width(columns: int) -> int:
+    return columns * CMP_COL_W + (columns + 1) * CMP_GAP
 
 
 def render_comparison(env, views: list, header: str, subheader: str) -> np.ndarray:
@@ -418,12 +422,13 @@ def render_comparison(env, views: list, header: str, subheader: str) -> np.ndarr
     ``views`` holds dicts with keys title, subtitle, view, lines, pieces, status.
     ``env`` supplies the palette and padding (identical for every game).
     """
-    img = background(CMP_W, CMP_H)
+    width = comparison_width(len(views))
+    img = background(width, CMP_H)
     text = Text()
     text.add(header, 40, 22, 30, WHITE, True)
     text.add(subheader, 42, 62, 15, MUTED, True)
     palette, padding = palette_of(env), env.padding
-    gap = (CMP_W - CMP_COL_W * len(views)) // (len(views) + 1)
+    gap = CMP_GAP
     for i, v in enumerate(views):
         x = gap + i * (CMP_COL_W + gap)
         draw_panel(img, x, 100, CMP_COL_W, 600, True)

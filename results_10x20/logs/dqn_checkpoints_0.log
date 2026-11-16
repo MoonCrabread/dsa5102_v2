@@ -1,0 +1,22 @@
+[dqn_checkpoints seed=0] step=0 eval=0.5 loss=nan V=nan eps=1.00 t=0s
+[dqn_checkpoints seed=0] step=2500 eval=3.6 loss=0.009 V=0.2 eps=0.90 t=7s
+[dqn_checkpoints seed=0] step=5000 eval=1.9 loss=0.008 V=0.6 eps=0.80 t=15s
+[dqn_checkpoints seed=0] step=7500 eval=5.3 loss=0.011 V=1.2 eps=0.71 t=22s
+[dqn_checkpoints seed=0] step=10000 eval=29.7 loss=0.013 V=1.8 eps=0.61 t=31s
+[dqn_checkpoints seed=0] step=12500 eval=37.8 loss=0.017 V=2.4 eps=0.51 t=41s
+[dqn_checkpoints seed=0] step=15000 eval=39.4 loss=0.022 V=2.9 eps=0.41 t=50s
+[dqn_checkpoints seed=0] step=17500 eval=46.4 loss=0.028 V=3.5 eps=0.31 t=60s
+[dqn_checkpoints seed=0] step=20000 eval=82.8 loss=0.039 V=4.0 eps=0.22 t=71s
+[dqn_checkpoints seed=0] step=22500 eval=137.2 loss=0.050 V=4.7 eps=0.12 t=86s
+[dqn_checkpoints seed=0] step=25000 eval=235.4 loss=0.064 V=5.5 eps=0.02 t=107s
+[dqn_checkpoints seed=0] step=27500 eval=327.9 loss=0.076 V=6.5 eps=0.02 t=132s
+[dqn_checkpoints seed=0] step=30000 eval=556.8 loss=0.088 V=7.2 eps=0.02 t=171s
+[dqn_checkpoints seed=0] step=32500 eval=1209.2 loss=0.101 V=8.0 eps=0.02 t=247s
+[dqn_checkpoints seed=0] step=35000 eval=983.7 loss=0.112 V=8.9 eps=0.02 t=310s
+[dqn_checkpoints seed=0] step=37500 eval=1133.8 loss=0.121 V=9.7 eps=0.02 t=381s
+[dqn_checkpoints seed=0] step=40000 eval=1739.4 loss=0.127 V=10.7 eps=0.02 t=486s
+[dqn_checkpoints seed=0] step=42500 eval=1726.4 loss=0.135 V=11.8 eps=0.02 t=592s
+[dqn_checkpoints seed=0] step=45000 eval=1570.0 loss=0.145 V=12.7 eps=0.02 t=688s
+[dqn_checkpoints seed=0] step=47500 eval=1877.8 loss=0.154 V=13.4 eps=0.02 t=802s
+[dqn_checkpoints seed=0] step=50000 eval=1861.0 loss=0.159 V=14.1 eps=0.02 t=914s
+[dqn_checkpoints seed=0] final {'eval_lines_mean': 1701.2, 'eval_lines_std': 539.8872104430702, 'eval_lines_median': 1997.0, 'eval_length_mean': 4269.48, 'eval_capped': 36, 'env_steps': 50000}

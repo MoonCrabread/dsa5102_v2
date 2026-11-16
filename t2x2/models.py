@@ -20,6 +20,8 @@ import torch
 from t2x2.policies import (
     SCORERS,
     HeuristicAgent,
+    MinHeightAgent,
+    RandomAgent,
     ScorerAgent,
     ValueAgent,
     ValueNetwork,
@@ -46,11 +48,15 @@ MODELS = {
         ModelSpec("linear_td", "LINEAR TD", "Value learning (TD)", "Linear", 14),
         ModelSpec("dqn", "DQN", "Value learning (TD)", "MLP 13-128-128-1", 18_433),
         ModelSpec("heuristic", "HEURISTIC", "Hand-tuned (Lee, 2013)", "Linear", 4, False),
+        ModelSpec("min_height", "MIN HEIGHT", "Single-feature greedy", "Aggregate height", 0, False),
+        ModelSpec("random", "RANDOM", "Uniform random", "No scoring", 0, False),
     )
 }
 
 # The 2x2 grid of the study, in display order.
 GRID = ("ce_linear", "ce_mlp", "linear_td", "dqn")
+# The untrained reference agents, from weakest to strongest.
+BASELINES = ("random", "min_height", "heuristic")
 
 
 def run_dir(key: str, seed: int, results: Path = RESULTS) -> Path:
@@ -80,6 +86,10 @@ def load_agent(key: str, seed: int = 0, results: Path = RESULTS):
         return ValueAgent(network, float(config["gamma"]))
     if key == "heuristic":
         return HeuristicAgent()
+    if key == "min_height":
+        return MinHeightAgent()
+    if key == "random":
+        return RandomAgent()  # re-seeded with the game seed at every reset
     raise KeyError(key)
 
 
@@ -102,3 +112,11 @@ def eval_game(key: str, seed: int, game_seed: int, results: Path = RESULTS) -> d
                     "capped": row["capped"] == "True",
                 }
     return None
+
+
+def load_checkpoint(path: Path, network: str = "mlp", gamma: float = 0.99):
+    """A value-learning agent from a checkpoint saved with ``train_td --save-every``."""
+    net = ValueNetwork(network)
+    net.load_state_dict(torch.load(path, weights_only=True))
+    net.eval()
+    return ValueAgent(net, gamma)

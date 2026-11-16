@@ -244,6 +244,28 @@ Environment steps until an evaluation during training **first exceeds the Heuris
 
 DQN is evaluated every 2,500 steps, so its numbers are accurate to 2,500 steps. By this measure DQN is about 7–30 times faster than CE. By total training budget, CE · MLP uses about 300 times as many steps as DQN.
 
+### Gameplay during training
+
+To show how an agent's play changes as it learns, DQN was trained once more (seed 0, same configuration) with the network saved every 2,500 steps. Five checkpoints then play the same evaluation game side by side:
+
+![One DQN agent at five stages of training](results_10x20/animations/dqn_training.gif)
+
+![DQN learning curve with the shown stages](results_10x20/animations/dqn_training_curve.png)
+
+*The orange line is this run's learning curve (10 evaluation games every 2,500 steps); the dashed line is DQN seed 0 of the 2×2 study. Circles are the shown checkpoints, each evaluated on the standard 50 evaluation games.*
+
+| Training steps | Mean lines (50 games) | Games at cap | What the animation shows |
+|---:|---:|---:|---|
+| 0 | 0.4 | 0 / 50 | Untrained network: pieces are stacked almost at random, full of holes; the game ends after 22 pieces |
+| 10,000 | 26.6 | 0 / 50 | Clears some lines but leaves many holes; lost after 145 pieces |
+| 20,000 | 76.1 | 0 / 50 | Survives longer and clears more, but the stack still fills up with holes; lost after 254 pieces |
+| 30,000 | 658.5 | 4 / 50 | Keeps the stack within the bottom few rows and clears lines steadily |
+| 50,000 | 1,701.2 | 36 / 50 | Final model: low, tidy board; most games reach the 5,000-piece cap |
+
+- **Play improves steadily with training**: every stage clears more lines than the previous one, by a factor of 2.6 to 66, and the boards in the animation change from random towers to a low, flat stack.
+- **This is a separate run, not the DQN of the 2×2 study.** The 2×2 run was made with an earlier revision of `train_td.py` (its `config.json` still lists a `reward` option that has since been removed) and saved no checkpoints, so this run does not reproduce it step for step. The two learning curves are close, and this run's final 50-game mean (1,701.2 lines) lies within the range of the three DQN seeds of the study (1,459.7–1,997.4).
+- **A single game is noisy.** On the game shown (seed 900000) the 30,000-step checkpoint clears 1,095 lines and the final model only 639, the reverse of their 50-game means. The table therefore uses 50 games per stage.
+
 ### Learned weights of CE · linear
 
 Each weight of the linear scoring function belongs to a readable board property. Only the relative sizes of the weights affect the choice, so the table converts the weights back to raw units and divides them by the magnitude of the hole weight. Each number reads as "worth this many holes":
@@ -315,13 +337,20 @@ bash run_10x20.sh python
 - Run time on a 10-core laptop: about 1 hour for value learning; the CE runs are sequential and take more than ten hours in total, several hours per CE · MLP seed.
 - Environment variables: `SEEDS="0 1 2"` selects seeds and `CE_WORKERS=8` sets the CE worker processes.
 - To redraw only the figures and the summary table: `python -m t2x2.plot`.
+- Gameplay during training: `python -m t2x2.train_td --network mlp --seed 0 --name dqn_checkpoints --save-every 2500` (about 15 minutes of training plus the final evaluation), then `python -m t2x2.animate_training` (evaluates the shown checkpoints on 50 games and renders the animation, about 5 minutes on 10 cores).
 - Board-shape analysis: `python -m t2x2.robustness` replays all 650 evaluation games (about 30 minutes on 10 cores); `--plot-only` redraws the figure and table from the saved CSVs.
 
 ## Interactive demo and animations
 
-![The four final models and the Heuristic playing the same game](results_10x20/animations/comparison.gif)
+![The four RL models playing the same game](results_10x20/animations/comparison_rl.gif)
 
-The four final models (training seed 0) and the Heuristic play the same evaluation game (seed 900000, so every agent gets the same pieces). The outlined cells are the placement each agent has chosen. Linear TD loses after 51 pieces; the others are still playing at the end of the clip. In the full recorded game the three strong models reach the 5,000-piece cap, while the Heuristic loses after 4,371 pieces with 1,732 lines.
+The four final RL models (training seed 0) play the same evaluation game (seed 900000, so every agent gets the same pieces). The outlined cells are the placement each model has chosen. Linear TD loses after 51 pieces; the other three are still playing at the end of the clip, and in the full recorded game all three reach the 5,000-piece cap.
+
+![The three baselines playing the same game](results_10x20/animations/comparison_baselines.gif)
+
+The three baselines on the same game. Random loses after 22 pieces without clearing a line, and the single-feature greedy agent after 72 pieces with 15 lines. The Heuristic is still playing at the end of the clip and, in the full recorded game, loses after 4,371 pieces with 1,732 lines.
+
+How one agent's play improves during training is shown in [Gameplay during training](#gameplay-during-training).
 
 **Play, or watch a model play**:
 
@@ -342,15 +371,17 @@ In model mode the model gets exactly the observation used in training and evalua
 **Render the animations** (written to `results_10x20/animations/`):
 
 ```bash
-python -m t2x2.animate                       # four models + Heuristic + comparison
+python -m t2x2.animate                       # every agent + the two comparisons
 python -m t2x2.animate --pieces 500 --fps 30 # longer, faster clips
 ```
 
 | File | Contents |
 |---|---|
-| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4`, `heuristic.mp4` | Full game screen of one agent for the first 300 pieces, ending with the result of the full recorded game |
-| `comparison.mp4` | All five agents side by side for the first 300 pieces |
-| `comparison.gif` | The first 100 pieces of the side-by-side view (the GIF above) |
+| `ce_linear.mp4`, `ce_mlp.mp4`, `linear_td.mp4`, `dqn.mp4` | Full game screen of one RL model for the first 300 pieces, ending with the result of the full recorded game |
+| `random.mp4`, `min_height.mp4`, `heuristic.mp4` | The same for each baseline |
+| `comparison_rl.mp4`, `comparison_rl.gif` | The four RL models side by side (300 pieces in the MP4, 100 in the GIF) |
+| `comparison_baselines.mp4`, `comparison_baselines.gif` | The three baselines side by side |
+| `dqn_training.mp4`, `dqn_training.gif`, `dqn_training_curve.png` | One DQN agent at five stages of training, see [Gameplay during training](#gameplay-during-training) |
 
 The interface is adapted from the `pretty_tetris_v3` interface of the [DSA5102 project](https://github.com/MoonCrabread/dsa5102).
 
@@ -369,7 +400,8 @@ t2x2/
 ├── playback.py    Plays an agent piece by piece and produces the animation frames
 ├── ui.py          Game screen, menu and comparison view (OpenCV + Pillow)
 ├── demo.py        Interactive demo: human play or watch a model
-├── animate.py     Renders the MP4 / GIF animations of the final models
+├── animate.py     Renders the MP4 / GIF animations of the final models and baselines
+├── animate_training.py  Animation and learning curve of one DQN agent at several training stages
 ├── robustness.py  Replays the evaluation games and records the board shape after every placement
 └── plot_robustness.py  Figure for the board-shape analysis
 tetris_gymnasium/  Tetris environment library (third party, see below)

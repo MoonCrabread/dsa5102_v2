@@ -1,12 +1,12 @@
 """Render animations of the final trained models.
 
-For each model of the 2x2 grid, and the Heuristic as a reference, it plays
-the same evaluation game (same piece sequence) with the final parameters and
-writes
+Every agent (the four final models of the 2x2 grid and the three baselines)
+plays the same evaluation game (same piece sequence), and the tool writes
 
-    results_10x20/animations/<model>.mp4   full game screen, one model
-    results_10x20/animations/comparison.mp4  all of them side by side
-    results_10x20/animations/comparison.gif  a shorter version for the README
+    results_10x20/animations/<agent>.mp4                full game screen, one agent
+    results_10x20/animations/comparison_baselines.mp4   the three baselines side by side
+    results_10x20/animations/comparison_rl.mp4          the four RL models side by side
+    results_10x20/animations/comparison_*.gif           shorter versions for the README
 
 The strong models survive the whole 5,000-piece game, so the clips show the
 first ``--pieces`` pieces; the full-game result is printed under each board.
@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -28,12 +29,12 @@ from PIL import Image
 from t2x2 import ui
 from t2x2.env import make_env
 from t2x2.evaluate import EVAL_SEED_START
-from t2x2.models import GRID, MODELS, RESULTS, eval_game, eval_summary, load_agent
+from t2x2.models import BASELINES, GRID, MODELS, RESULTS, eval_game, eval_summary, load_agent
 from t2x2.playback import AgentGame
 
 
-# The 2x2 grid plus the hand-tuned Heuristic as a reference.
-SHOWN = (*GRID, "heuristic")
+# Per-agent clips: the 2x2 grid and the three baselines.
+SHOWN = (*GRID, *BASELINES)
 
 
 class Video:
@@ -106,53 +107,54 @@ def model_clip(key, args, out: Path) -> None:
     print(f"[{key}] {game.pieces} pieces, {game.lines} lines -> {out / f'{key}.mp4'}", flush=True)
 
 
-def comparison_frames(args, pieces: int):
-    """Yield (frame, hold) for the side-by-side clip of the 2x2 grid."""
-    games = {}
-    for key in SHOWN:
-        games[key] = AgentGame(load_agent(key, args.train_seed), cap=pieces)
-        games[key].reset(args.game_seed)
-    notes = {k: full_game_note(k, args.train_seed, args.game_seed) for k in SHOWN}
-    env = games[SHOWN[0]].base
-    header = "FINAL MODELS AND THE HEURISTIC ON THE SAME GAME"
-    sub = (f"Game seed {args.game_seed}  ·  training seed {args.train_seed}  ·  "
-           f"first {pieces:,} pieces  ·  ghost = chosen placement")
+@dataclass
+class Column:
+    """One board of a side-by-side clip: an agent and its labels."""
 
-    def columns(views):
+    title: str
+    subtitle: str
+    agent: object
+    note: str = ""
+
+
+def side_by_side_frames(columns: list, game_seed: int, pieces: int, header: str,
+                        subheader: str, end_hold: int):
+    """Yield (frame, hold) with every column playing the same game in lockstep."""
+    games = [AgentGame(c.agent, cap=pieces) for c in columns]
+    for g in games:
+        g.reset(game_seed)
+    env = games[0].base
+
+    def render(views):
         cols = []
-        for key in SHOWN:
-            g, spec = games[key], MODELS[key]
-            status = "GAME OVER" if g.done and not g.capped else None
+        for c, g, v in zip(columns, games, views):
             cols.append({
-                "title": spec.label,
-                "subtitle": f"{spec.method} · {spec.function_class}",
-                "view": views[key], "lines": f"{g.lines:,}", "pieces": f"{g.pieces:,}",
-                "status": status, "note": notes[key],
+                "title": c.title, "subtitle": c.subtitle, "view": v,
+                "lines": f"{g.lines:,}", "pieces": f"{g.pieces:,}",
+                "status": "GAME OVER" if g.done and not g.capped else None, "note": c.note,
             })
-        return cols
+        return ui.render_comparison(env, cols, header, subheader)
 
     try:
-        while not all(g.done for g in games.values()):
+        while not all(g.done for g in games):
             # Pieces whose frames run out early hold their last frame.
-            clips = {k: g.advance() or [g.view()] for k, g in games.items()}
-            for i in range(max(len(c) for c in clips.values())):
-                views = {k: c[min(i, len(c) - 1)] for k, c in clips.items()}
-                yield ui.render_comparison(env, columns(views), header, sub), 1
-        final = {k: g.view() for k, g in games.items()}
-        yield ui.render_comparison(env, columns(final), header, sub), args.fps * 3
+            clips = [g.advance() or [g.view()] for g in games]
+            for i in range(max(len(c) for c in clips)):
+                yield render([c[min(i, len(c) - 1)] for c in clips]), 1
+        yield render([g.view() for g in games]), end_hold
     finally:
-        for g in games.values():
+        for g in games:
             g.close()
 
 
-def comparison_video(args, out: Path) -> None:
-    video = Video(out / "comparison.mp4", args.fps, (ui.comparison_width(len(SHOWN)), ui.CMP_H))
+def write_video(frames, path: Path, fps: int, columns: int) -> None:
+    video = Video(path, fps, (ui.comparison_width(columns), ui.CMP_H))
     try:
-        for frame, hold in comparison_frames(args, args.pieces):
+        for frame, hold in frames:
             video.write(frame, hold)
     finally:
         video.close()
-    print(f"[comparison] -> {out / 'comparison.mp4'}", flush=True)
+    print(f"-> {path}", flush=True)
 
 
 def color_swatch(env, width: int, cell: int) -> np.ndarray:
@@ -169,28 +171,48 @@ def color_swatch(env, width: int, cell: int) -> np.ndarray:
     return img
 
 
-def comparison_gif(args, out: Path) -> None:
-    frames, durations = [], []
-    w, h = int(ui.comparison_width(len(SHOWN)) * args.gif_scale), int(ui.CMP_H * args.gif_scale)
-    cell = max(8, int(ui.CMP_CELL * args.gif_scale))
+def write_gif(frames, path: Path, fps: int, columns: int, scale: float) -> None:
+    images, durations = [], []
+    w, h = int(ui.comparison_width(columns) * scale), int(ui.CMP_H * scale)
+    cell = max(8, int(ui.CMP_CELL * scale))
     palette = None  # one shared palette lets the GIF store only changed regions
-    for frame, hold in comparison_frames(args, args.gif_pieces):
+    for frame, hold in frames:
         small = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
         if palette is None:
             env = make_env()
-            sample = np.vstack([small, cv2.resize(color_swatch(env.unwrapped, 7 * 3 * cell, 3 * cell),
-                                                  (w, 9 * cell), interpolation=cv2.INTER_NEAREST)])
+            swatch = color_swatch(env.unwrapped, 7 * 3 * cell, 3 * cell)
             env.close()
+            sample = np.vstack([small, cv2.resize(swatch, (w, 9 * cell),
+                                                  interpolation=cv2.INTER_NEAREST)])
             palette = Image.fromarray(cv2.cvtColor(sample, cv2.COLOR_BGR2RGB)).quantize(
                 colors=128, method=Image.Quantize.MEDIANCUT)
         rgb = Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
-        frames.append(rgb.quantize(palette=palette, dither=Image.Dither.NONE))
-        durations.append(int(1000 * hold / args.fps))
-    path = out / "comparison.gif"
-    frames[0].save(path, save_all=True, append_images=frames[1:], duration=durations,
+        images.append(rgb.quantize(palette=palette, dither=Image.Dither.NONE))
+        durations.append(int(1000 * hold / fps))
+    images[0].save(path, save_all=True, append_images=images[1:], duration=durations,
                    loop=0, optimize=True, disposal=1)
-    print(f"[comparison] {len(frames)} frames -> {path} "
-          f"({path.stat().st_size / 1e6:.1f} MB)", flush=True)
+    print(f"-> {path} ({len(images)} frames, {path.stat().st_size / 1e6:.1f} MB)", flush=True)
+
+
+# Two side-by-side clips: (file name, agents, header).
+COMPARISONS = (
+    ("comparison_baselines", BASELINES, "THREE BASELINES ON THE SAME GAME"),
+    ("comparison_rl", GRID, "FOUR REINFORCEMENT LEARNING MODELS ON THE SAME GAME"),
+)
+
+
+def comparison_frames(args, keys, header: str, pieces: int):
+    """The given agents side by side on the same game."""
+    columns = [
+        Column(MODELS[k].label, f"{MODELS[k].method} · {MODELS[k].function_class}",
+               load_agent(k, args.train_seed), full_game_note(k, args.train_seed, args.game_seed))
+        for k in keys
+    ]
+    trained = any(MODELS[k].trained for k in keys)
+    who = f"final models, training seed {args.train_seed}" if trained else "untrained reference agents"
+    sub = (f"Game seed {args.game_seed}  ·  {who}  ·  "
+           f"first {pieces:,} pieces  ·  ghost = chosen placement")
+    return side_by_side_frames(columns, args.game_seed, pieces, header, sub, args.fps * 3)
 
 
 def main() -> None:
@@ -210,8 +232,12 @@ def main() -> None:
     for key in args.models:
         model_clip(key, args, args.out)
     if not args.no_comparison:
-        comparison_video(args, args.out)
-        comparison_gif(args, args.out)
+        for name, keys, header in COMPARISONS:
+            n = len(keys)
+            write_video(comparison_frames(args, keys, header, args.pieces),
+                        args.out / f"{name}.mp4", args.fps, n)
+            write_gif(comparison_frames(args, keys, header, args.gif_pieces),
+                      args.out / f"{name}.gif", args.fps, n, args.gif_scale)
 
 
 if __name__ == "__main__":

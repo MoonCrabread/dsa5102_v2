@@ -140,6 +140,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eval-episodes", type=int, default=10)
     p.add_argument("--final-eval-episodes", type=int, default=50)
     p.add_argument("--eval-cap", type=int, default=5000)
+    p.add_argument("--save-every", type=int, default=0,
+                   help="also save the online network every N steps (and at step 0) to checkpoints/")
     p.add_argument("--name", default=None, help="Result folder name (default by network)")
     p.add_argument("--out", type=Path, default=Path("results_10x20"))
     args = p.parse_args()
@@ -185,6 +187,11 @@ def main() -> None:
     losses, values = [], []
     episodes = 0
 
+    def checkpoint(step: int) -> None:
+        if args.save_every and step % args.save_every == 0:
+            (run_dir / "checkpoints").mkdir(exist_ok=True)
+            torch.save(online.state_dict(), run_dir / "checkpoints" / f"step_{step:06d}.pt")
+
     def log(step: int, epsilon: float) -> None:
         summary = summarize(evaluate(agent, args.eval_episodes, args.eval_cap, env=eval_env))
         curve.writerow({
@@ -211,6 +218,7 @@ def main() -> None:
 
     observation, info = env.reset(seed=args.seed * 100_000)
     log(0, args.epsilon_start)
+    checkpoint(0)
     for step in range(1, args.steps + 1):
         fraction = min(step / max(args.epsilon_decay_steps, 1), 1.0)
         epsilon = args.epsilon_start + fraction * (args.epsilon_end - args.epsilon_start)
@@ -252,6 +260,7 @@ def main() -> None:
             observation, info = env.reset(seed=args.seed * 100_000 + episodes)
         if step % args.eval_every == 0 or step == args.steps:
             log(step, epsilon)
+        checkpoint(step)
 
     curve_file.close()
     torch.save(online.state_dict(), run_dir / "model.pt")

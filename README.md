@@ -136,11 +136,15 @@ a^* = \arg\max_a \big[\, r(a) + \gamma\, V(s'_a) \,\big]
 
 where $`r(a)`$ is the number of lines placement $`a`$ clears immediately and $`s'_a`$ is the resulting board. Placements that end the game have $`V = 0`$.
 
-**Training target** (one-step TD; Sutton, 1988): for the afterstate $`s'_t`$ actually chosen,
+**Training target** (one-step afterstate TD; Sutton, 1988): $`V(s'_t)`$ excludes the reward from the placement that produced $`s'_t`$. For a nonterminal transition, after observing the next piece, the target is
 
 ```math
-V(s'_t) \leftarrow r_{t+1} + \gamma \max_a \big[\, r(a) + \gamma\, V_{\text{target}}(s'_{t+1,a}) \,\big]
+y_t = \max_{a \in \mathcal{A}_{t+1}} \big[\, r_{t+1}(a) + \gamma\, V_{\text{target}}(s'_{t+1,a}) \,\big]
 ```
+
+Here $`\mathcal{A}_{t+1}`$ is the set of legal placements for the next piece, $`r_{t+1}(a)`$ is the immediate line-clear reward of candidate placement $`a`$, and $`s'_{t+1,a}`$ is its resulting afterstate. Game-over candidates have zero continuation value; if the current transition terminates, $`y_t = 0`$. The value network is trained to fit $`V(s'_t)`$ to $`y_t`$.
+
+This matches `n_step=1` in `t2x2/train_td.py`: the accumulated reward prefix is zero and the bootstrap multiplier is one, so there is no additional reward or discount outside the maximization.
 
 Training uses the standard DQN components (Mnih et al., 2015): experience replay, a periodically synchronized target network, the Huber (smooth L1) loss and ε-greedy exploration, with the Adam optimizer (Kingma & Ba, 2015). See [`t2x2/train_td.py`](t2x2/train_td.py).
 
